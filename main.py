@@ -2,7 +2,7 @@ import abc
 import logging
 
 import pygame
-from pygame import Vector2
+from pygame import Vector2, Rect
 
 import network
 import ui
@@ -40,9 +40,11 @@ class MainScene(Scene):
         self.clock = pygame.time.Clock()
 
         self.font = pygame.font.SysFont('MS UI Gothic', 32)
-        self.text = ui.TextRenderer(Vector2(100, 100),
-                                    "Hello\n          world!\n  おはよう",
-                                    self.font, max_width=300)
+        self.text = ui.Text('Hello\n          world!\n  おはよう', self.font,
+                            box=Rect((100, 100), (300, 200)),)
+        self.button = ui.Button(child=ui.Text('Click me', self.font),
+                                box=Rect((100, 300), (200, 80)),
+                                callback=lambda: print('Hello from callback!'))
 
     def start(self):
         while True:
@@ -51,6 +53,8 @@ class MainScene(Scene):
 
             # Handle events
             for event in pygame.event.get():
+                self.button.handle(event)
+
                 if event.type == pygame.QUIT:
                     return
 
@@ -64,6 +68,7 @@ class MainScene(Scene):
             # Draw to the screen
             self.screen.fill(pygame.Color('white'))
             self.text.draw(self.screen)
+            self.button.draw(self.screen)
             pygame.display.flip()
 
             # Yield control to the main loop
@@ -117,5 +122,5 @@ def main():
         server.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
