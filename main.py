@@ -2,8 +2,10 @@ import abc
 import logging
 
 import pygame
+from pygame import Vector2
 
 import network
+import ui
 
 
 class QuitException(Exception):
@@ -37,6 +39,11 @@ class MainScene(Scene):
         self.client = client
         self.clock = pygame.time.Clock()
 
+        self.font = pygame.font.SysFont('MS UI Gothic', 32)
+        self.text = ui.TextUI(Vector2(100, 100),
+                              "Hello\n          world!\n  おはよう",
+                              self.font, max_width=300)
+
     def start(self):
         while True:
             # Control the framerate
@@ -50,12 +57,13 @@ class MainScene(Scene):
                 if event.type == pygame.KEYDOWN:
                     self.client.send(event.key)
 
-            # Recive incoming packets
+            # Receive incoming packets
             while packet := self.client.recive():
                 print(packet)
 
             # Draw to the screen
             self.screen.fill(pygame.Color('white'))
+            self.text.draw(self.screen)
             pygame.display.flip()
 
             # Yield control to the main loop
@@ -80,7 +88,7 @@ def main():
     else:
         server = None
 
-        address = input('Please enter the adress with port to connect to: ')
+        address = input('Please enter the address with port to connect to: ')
         address = tuple(address.strip().split(':'))
 
     client = network.Client(*address)
