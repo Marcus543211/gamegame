@@ -1,9 +1,13 @@
+import logging
+
 import pygame
 
 import network
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     should_host = input('Host [y/n]? ')
 
     if 'y' in should_host.lower():
@@ -11,7 +15,7 @@ def main():
 
         print(f'Connect on address: {network.get_local_ip()}:{server.port}')
 
-        address = ('127.0.0.1', server.address[1])
+        address = ('127.0.0.1', server.port)
     else:
         server = None
 
