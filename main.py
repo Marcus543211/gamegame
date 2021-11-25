@@ -1,5 +1,3 @@
-import urllib.request
-
 import pygame
 
 import network
@@ -11,10 +9,7 @@ def main():
     if 'y' in should_host.lower():
         server = network.EchoServer('0.0.0.0')
 
-        external_ip = urllib.request.urlopen(
-            'https://api.ipify.org').read().decode('utf8')
-
-        print(f'Connect on address: {external_ip}:{server.address[1]}')
+        print(f'Connect on address: {network.get_local_ip()}:{server.port}')
 
         address = ('127.0.0.1', server.address[1])
     else:
