@@ -1,13 +1,74 @@
 import logging
+from abc import ABC, abstractmethod
 
 import pygame
 
 import network
 
 
+class QuitException(Exception):
+    pass
+
+
+# NOTE: "yield from" can be used to give control to another Scene.
+# Returning from start returns control to the previous scene
+# and QuitException unwinds the entire stack and quits the game.
+class Scene(ABC):
+    @abstractmethod
+    def start(self):
+        pass
+
+    def step(self):
+        if not hasattr(self, '_generator'):
+            self._generator = self.start()
+
+        return self._generator.send(None)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.step()
+
+
+class MainScene(Scene):
+    def __init__(self, screen, client):
+        self.screen = screen
+        self.client = client
+        self.clock = pygame.time.Clock()
+
+    def start(self):
+        while True:
+            # Control the framerate
+            self.clock.tick(120)
+
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+                if event.type == pygame.KEYDOWN:
+                    self.client.send(event.key)
+
+            # Recive incoming packets
+            while packet := self.client.recive():
+                print(packet)
+
+            # Draw to the screen
+            self.screen.fill(pygame.Color('white'))
+            pygame.display.flip()
+
+            # Yield control to the main loop
+            yield
+
+
 def main():
+    # Give me some logging
     logging.basicConfig(level=logging.INFO)
 
+    # Set up the networking stuff
+    # TODO: This should probably be UI, however, that's
+    # a lot of work that I don't want to do right now.
     should_host = input('Host [y/n]? ')
 
     if 'y' in should_host.lower():
@@ -28,29 +89,25 @@ def main():
 
     pygame.display.set_caption('CannedCritters')
     screen = pygame.display.set_mode((800, 600))
-    clock = pygame.time.Clock()
 
+    scene = MainScene(screen, client)
+
+    # Main loop
     while True:
-        clock.tick(120)
+        try:
+            # Step the scene
+            scene.step()
+        except (QuitException, StopIteration):
+            break
+        else:
+            # Step the server, if we have one
+            if server:
+                server.step()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                client.close()
-                if server:
-                    server.close()
-                return
-
-            if event.type == pygame.KEYDOWN:
-                client.send(event.key)
-
-        if server:
-            server.step()
-
-        while packet := client.recive():
-            print(packet)
-
-        screen.fill(pygame.Color('white'))
-        pygame.display.flip()
+    # Goodbye networking
+    client.close()
+    if server:
+        server.close()
 
 
 if __name__ == "__main__":
