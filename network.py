@@ -14,11 +14,15 @@ class Server(abc.ABC):
         self._socket.setblocking(False)
         self._socket.listen(1)
 
-        logging.info("Server created on address %s", self.address)
+        logging.info("Server created on: %s:%s", self.address, self.port)
 
     @property
     def address(self):
-        return self._socket.getsockname()
+        return self._socket.getsockname()[0]
+
+    @property
+    def port(self):
+        return self._socket.getsockname()[1]
 
     @abc.abstractmethod
     def handle(self, client, address, data):
@@ -94,3 +98,7 @@ class Client:
 
     def close(self):
         self._socket.close()
+
+
+def get_local_ip():
+    return socket.gethostbyname_ex(socket.gethostname())[-1][0]
