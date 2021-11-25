@@ -14,7 +14,7 @@ class Server(abc.ABC):
         self._socket.setblocking(False)
         self._socket.listen(1)
 
-        logging.info(f"Server created on address {self.address}")
+        logging.info("Server created on address %s", self.address)
 
     @property
     def address(self):
@@ -28,8 +28,7 @@ class Server(abc.ABC):
         logging.info("Server started serving")
 
         while True:
-            self._accept_connections()
-            self._handle_messages()
+            self.step()
 
             time.sleep(self.sleep)
 
@@ -37,13 +36,17 @@ class Server(abc.ABC):
         logging.info("Server was closed")
         self._socket.close()
 
+    def step(self):
+        self._accept_connections()
+        self._handle_messages()
+
     def _accept_connections(self):
         try:
             connection, address = self._socket.accept()
         except BlockingIOError:
             pass
         else:
-            logging.debug(f"Server accepted client: {address}")
+            logging.debug("Server accepted client: %s", address)
             self.clients.append((connection, address))
 
     def _handle_messages(self):
@@ -55,11 +58,11 @@ class Server(abc.ABC):
             else:
                 # Client has disconnected (I think)
                 if not data:
-                    logging.debug(f"Server lost client: {address}")
+                    logging.debug("Server lost client: %s", address)
                     self.clients.remove((connection, address))
                 else:
                     logging.debug(
-                        f"Server recived {data} from client: {address}")
+                        "Server recived %s from client: %s", data, address)
                     self.handle(connection, address, data)
 
 
@@ -70,7 +73,7 @@ class EchoServer(Server):
 
 
 class Client:
-    def __init__(self, address, port, blocking=True):
+    def __init__(self, address, port, blocking=False):
         self.host = (address, port)
 
         self._socket = socket.create_connection(self.host)

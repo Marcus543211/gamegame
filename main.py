@@ -1,4 +1,4 @@
-import multiprocessing
+import urllib.request
 
 import pygame
 
@@ -10,37 +10,45 @@ def main():
 
     if 'y' in should_host.lower():
         server = network.EchoServer('0.0.0.0')
-        address = ('127.0.0.1', server.address[1])
 
-        host = multiprocessing.Process(target=server.serve)
-        host.start()
+        external_ip = urllib.request.urlopen(
+            'https://api.ipify.org').read().decode('utf8')
+
+        print(f'Connect on address: {external_ip}:{server.address[1]}')
+
+        address = ('127.0.0.1', server.address[1])
     else:
-        host = None
+        server = None
 
         address = input('Please enter the adress with port to connect to: ')
         address = tuple(address.strip().split(':'))
 
     client = network.Client(*address)
 
-    message = "Hello world!"
-    client.send(message)
-
-    message = client.recive()
-    print(message)
-
     pygame.init()
 
     pygame.display.set_caption('CannedCritters')
     screen = pygame.display.set_mode((800, 600))
+    clock = pygame.time.Clock()
 
     while True:
+        clock.tick(120)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 client.close()
-                if host:
-                    host.terminate()
-
+                if server:
+                    server.close()
                 return
+
+            if event.type == pygame.KEYDOWN:
+                client.send(event.key)
+
+        if server:
+            server.step()
+
+        while packet := client.recive():
+            print(packet)
 
         screen.fill(pygame.Color('white'))
         pygame.display.flip()
