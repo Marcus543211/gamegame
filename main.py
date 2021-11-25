@@ -40,9 +40,9 @@ class MainScene(Scene):
         self.clock = pygame.time.Clock()
 
         self.font = pygame.font.SysFont('MS UI Gothic', 32)
-        self.text = ui.TextUI(Vector2(100, 100),
-                              "Hello\n          world!\n  おはよう",
-                              self.font, max_width=300)
+        self.text = ui.TextRenderer(Vector2(100, 100),
+                                    "Hello\n          world!\n  おはよう",
+                                    self.font, max_width=300)
 
     def start(self):
         while True:
@@ -81,10 +81,9 @@ def main():
 
     if 'y' in should_host.lower():
         server = network.EchoServer('0.0.0.0')
+        address = ('127.0.0.1', server.port)
 
         print(f'Connect on address: {network.get_local_ip()}:{server.port}')
-
-        address = ('127.0.0.1', server.port)
     else:
         server = None
 
@@ -95,8 +94,8 @@ def main():
 
     pygame.init()
 
-    pygame.display.set_caption('CannedCritters')
     screen = pygame.display.set_mode((800, 600))
+    pygame.display.set_caption('CannedCritters')
 
     scene = MainScene(screen, client)
 

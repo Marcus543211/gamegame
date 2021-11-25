@@ -5,7 +5,7 @@ import pygame
 from pygame import Color, Vector2
 
 
-class TextUI:
+class TextRenderer:
     def __init__(
             self, position: Vector2, text: str, font: pygame.font.Font, *,
             color: Color = Color('black'), max_width: Optional[int] = None):
@@ -17,14 +17,20 @@ class TextUI:
 
         self._render()
 
+    def draw(self, surface):
+        line_space = self._font.get_linesize()
+        for i, line in enumerate(self._rendered):
+            position = self.position + Vector2(0, i * line_space)
+            surface.blit(line, position)
+
     # TODO: I feel there might be a better way to add
     # all these properties, however, my brain is fried.
     @property
     def text(self):
         return self._text
 
-    @text.getter
-    def set_text(self, text):
+    @text.setter
+    def text(self, text):
         self._text = text
         self._render()
 
@@ -32,8 +38,8 @@ class TextUI:
     def font(self):
         return self._font
 
-    @font.getter
-    def set_font(self, font):
+    @font.setter
+    def font(self, font):
         self._font = font
         self._render()
 
@@ -41,8 +47,8 @@ class TextUI:
     def color(self):
         return self._color
 
-    @color.getter
-    def set_color(self, color):
+    @color.setter
+    def color(self, color):
         self._color = color
         self._render()
 
@@ -50,8 +56,8 @@ class TextUI:
     def max_width(self):
         return self._max_width
 
-    @max_width.getter
-    def set_max_width(self, max_width):
+    @max_width.setter
+    def max_width(self, max_width):
         self._max_width = max_width
         self._render()
 
@@ -116,9 +122,3 @@ class TextUI:
 
     def _render_text(self, line: str):
         self._rendered.append(self._font.render(line, True, self._color))
-
-    def draw(self, surface):
-        line_space = self._font.get_linesize()
-        for i, line in enumerate(self._rendered):
-            position = self.position + Vector2(0, i * line_space)
-            surface.blit(line, position)

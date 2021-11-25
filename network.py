@@ -66,7 +66,7 @@ class Server(abc.ABC):
                     self.clients.remove((connection, address))
                 else:
                     logging.debug(
-                        "Server recived %s from client: %s", data, address)
+                        "Server received %s from client: %s", data, address)
                     self.handle(connection, address, data)
 
 
