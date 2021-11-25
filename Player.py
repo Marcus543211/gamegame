@@ -1,4 +1,4 @@
-from pygame import *
+from pygame import Vector2
 
 from dataclasses import dataclass
 
@@ -9,10 +9,10 @@ class Player:
     position: Vector2 = Vector2(0, 0)
     friction: float = 0
 
-    def update(self, deltaTime):
-        self.velocity += self.acceleration * deltaTime
-        self.velocity *= 1 - self.friction * deltaTime
-        self.position += self.velocity * deltaTime
+    def update(self, deltatime):
+        self.velocity += self.acceleration * deltatime
+        self.velocity *= 1 - self.friction * deltatime
+        self.position += self.velocity * deltatime
 
     def draw(self, screen):
         pass
