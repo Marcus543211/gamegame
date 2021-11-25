@@ -1,5 +1,5 @@
+import abc
 import logging
-from abc import ABC, abstractmethod
 
 import pygame
 
@@ -13,8 +13,8 @@ class QuitException(Exception):
 # NOTE: "yield from" can be used to give control to another Scene.
 # Returning from start returns control to the previous scene
 # and QuitException unwinds the entire stack and quits the game.
-class Scene(ABC):
-    @abstractmethod
+class Scene(abc.ABC):
+    @abc.abstractmethod
     def start(self):
         pass
 

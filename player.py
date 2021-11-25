@@ -1,6 +1,7 @@
+from dataclasses import dataclass
+
 from pygame import Vector2
 
-from dataclasses import dataclass
 
 @dataclass
 class Player:
@@ -16,4 +17,3 @@ class Player:
 
     def draw(self, screen):
         pass
-
