@@ -3,9 +3,13 @@ import logging
 
 import pygame
 from pygame import Vector2, Rect
+# Pygame skal helst initialiseres så hurtigt så muligt
+# Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype som standard parameter, så klager pygame
+pygame.init()
 
 import network
 import ui
+from player import Player
 
 
 class QuitException(Exception):
@@ -45,11 +49,12 @@ class MainScene(Scene):
         self.button = ui.Button(child=ui.Text('Click me', self.font),
                                 box=Rect((100, 300), (200, 80)),
                                 callback=lambda: print('Hello from callback!'))
+        self.player = Player()
 
     def start(self):
         while True:
             # Control the framerate
-            self.clock.tick(120)
+            deltatime = self.clock.tick(120) / 1000
 
             # Handle events
             for event in pygame.event.get():
@@ -69,6 +74,8 @@ class MainScene(Scene):
             self.screen.fill(pygame.Color('white'))
             self.text.draw(self.screen)
             self.button.draw(self.screen)
+            self.player.update(deltatime)
+            self.player.draw(self.screen)
             pygame.display.flip()
 
             # Yield control to the main loop
@@ -97,10 +104,8 @@ def main():
 
     client = network.Client(*address)
 
-    pygame.init()
-
     screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption('CannedCritters')
+    pygame.display.set_caption('CrinnedCatters')
 
     scene = MainScene(screen, client)
 
