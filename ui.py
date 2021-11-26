@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import abc
 import logging
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 import pygame
@@ -13,38 +16,68 @@ class Widget(abc.ABC):
     """
     A widget is any UI element.
 
-    Every widget is box sized. At initialization a box can be None.
-    That means it will be assigned by a parent later. If it isn't
-    then an error will be thrown when the widget is drawn.
+    Every widget has a position and a size. At initialization a widgets
+    position can be None. That means it will be assigned by a parent later.
+    If it isn't then an error will be thrown when the widget is drawn.
     """
 
     @abc.abstractmethod
     def draw(self, screen: pygame.Surface):
-        if self.box is None:
-            raise MissingBoxError
+        if self.pos is None:
+            raise Exception('Widget cannot be drawn without a position')
 
     def handle(self, event: pygame.event.Event):
         pass
 
     @property
     @abc.abstractmethod
-    def box(self):
+    def pos(self) -> Vector2:
         pass
 
-    @box.setter
+    @pos.setter
     @abc.abstractmethod
-    def box(self, box: Rect):
+    def pos(self, pos: Vector2):
         pass
 
+    @property
+    @abc.abstractmethod
+    def size(self) -> Size:
+        pass
 
-class MissingBoxError(Exception):
+    @size.setter
+    @abc.abstractmethod
+    def size(self, size: Size):
+        pass
+
+    @property
+    def rect(self) -> Rect:
+        return Rect(self.pos, self.size.as_vector2())
+
+
+@dataclass
+class Size:
+    width: int
+    height: int
+
+    def as_vector2(self):
+        return Vector2(self.width, self.height)
+
+
+class FixedSize(Size):
     pass
+
+
+@dataclass
+class NaturalSize(Size):
+    """A natural size means that the widget itself will choose its size"""
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 class Button(Widget):
     def __init__(
-            self, box: Optional[Rect] = None, child: Optional[Widget] = None,
-            callback: Optional[Callable] = lambda: None):
+            self, pos: Optional[Vector2] = None,  size: Size = NaturalSize(),
+            child: Optional[Widget] = None, callback: Optional[Callable] = lambda: None):
         self.child = child
         self.callback = callback
 
@@ -53,77 +86,134 @@ class Button(Widget):
         self.border_color = Color('black')
         self.highlight_color = Color('lightblue')
 
-        # We're setting box at the end because it will call
-        # the setter and so it needs the other variables to exist.
-        self.box = box
-
-    @property
-    def box(self):
-        return self._box
-
-    @box.setter
-    def box(self, box: Rect):
-        self._box = box
-
-        if self.child:
-            padding = self.border_width + self.padding
-            self.child.box = box.inflate(-padding, -padding)
+        # We're setting the size and position at the end because it
+        # will call the setter and so it needs the other variables to exist.
+        self.pos = pos
+        self.size = size
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
 
-        if self.box.collidepoint(pygame.mouse.get_pos()):
-            pygame.draw.rect(screen, self.highlight_color, self.box)
+        if self.rect.collidepoint(pygame.mouse.get_pos()):
+            pygame.draw.rect(screen, self.highlight_color, self.rect)
 
         if self.child:
             self.child.draw(screen)
 
         pygame.draw.rect(screen, self.border_color,
-                         self.box, width=self.border_width)
+                         self.rect, width=self.border_width)
 
     def handle(self, event: pygame.event.Event):
         if event.type == pygame.MOUSEBUTTONUP:
-            if self.box.collidepoint(event.pos):
+            if self.rect.collidepoint(event.pos):
                 self.callback()
+
+    @property
+    def pos(self) -> Vector2:
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos: Vector2):
+        self._pos = pos
+        if self.child:
+            padding = Vector2(self.border_width + self.padding)
+            self.child.pos = pos + padding
+
+    @property
+    def size(self) -> Size:
+        if isinstance(self._size, FixedSize):
+            return self._size
+
+        elif isinstance(self._size, NaturalSize):
+            child_size = self.child.size if self.child else FixedSize(0, 0)
+            padding = self.border_width + self.padding
+            return NaturalSize(child_size.width + 2 * padding, child_size.height + 2 * padding)
+
+        else:
+            raise Exception('Unknown size type')
+
+    @size.setter
+    def size(self, size: Size):
+        if isinstance(size, FixedSize):
+            self._size = size
+            if self.child:
+                padding = self.border_width + self.padding
+                self.child.size = FixedSize(
+                    size.width - 2 * padding, size.height - 2 * padding)
+
+        elif isinstance(size, NaturalSize):
+            self.child.size = NaturalSize()
+            self._size = NaturalSize()
+
+        else:
+            raise Exception('Unknown size type')
 
 
 class Text(Widget):
     def __init__(
             self, text: str, font: pygame.font.Font, *,
-            box: Optional[Rect] = None, color: Color = Color('black')):
+            pos: Optional[Vector2] = None, size: Size = NaturalSize(),
+            color: Color = Color('black')):
         # TODO: Currently the height of the box is ignored.
         # Implementing scroll seems a little insane, so just
         # cutting off the bottom is probably the way to go.
 
-        self._box = box
-        if box:
+        self._pos = pos
+        self._size = size
+
+        max_width = size.width if isinstance(size, FixedSize) else None
+
+        if self.pos:
             self._text = TextRenderer(
-                Vector2(box.topleft), text, font, color=color, max_width=box.width)
+                self.pos, text, font, color=color, max_width=max_width)
         else:
             # The box will be assigned later otherwise an error will be raised
-            self._text = TextRenderer(Vector2(0, 0), text, font, color=color)
-
-    @property
-    def box(self):
-        return self._box
-
-    @box.setter
-    def box(self, box: Rect):
-        self._box = box
-        self._text.position = Vector2(box.topleft)
-        self._text.max_width = box.width
+            self._text = TextRenderer(
+                Vector2(0), text, font, color=color, max_width=max_width)
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
 
         self._text.draw(screen)
 
+    @property
+    def pos(self) -> Vector2:
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos: Vector2):
+        self._pos = pos
+        self._text.pos = pos
+
+    @property
+    def size(self) -> Size:
+        if isinstance(self._size, FixedSize):
+            return self._size
+
+        elif isinstance(self._size, NaturalSize):
+            return NaturalSize(self._text._rendered[0].get_width(), self._text.font.get_linesize())
+
+        else:
+            raise Exception('Unknown size type')
+
+    @size.setter
+    def size(self, size: Size):
+        if isinstance(size, FixedSize):
+            self._size = size
+            self._text.max_width = size.width
+
+        elif isinstance(size, NaturalSize):
+            self._size = size
+
+        else:
+            raise Exception('Unknown size type')
+
 
 class TextRenderer:
     def __init__(
-            self, position: Vector2, text: str, font: pygame.font.Font, *,
+            self, pos: Vector2, text: str, font: pygame.font.Font, *,
             color: Color = Color('black'), max_width: Optional[int] = None):
-        self.position = position
+        self.pos = pos
         self._text = text
         self._font = font
         self._color = color
@@ -138,8 +228,8 @@ class TextRenderer:
 
         line_space = self._font.get_linesize()
         for i, line in enumerate(self._rendered):
-            position = self.position + Vector2(0, i * line_space)
-            surface.blit(line, position)
+            pos = self.pos + Vector2(0, i * line_space)
+            surface.blit(line, pos)
 
     # TODO: I feel there might be a better way to add
     # all these properties, however, my brain is fried.

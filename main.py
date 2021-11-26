@@ -7,9 +7,9 @@ from pygame import Vector2, Rect
 # Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype som standard parameter, så klager pygame
 pygame.init()
 
+from player import Player
 import network
 import ui
-from player import Player
 
 
 class QuitException(Exception):
@@ -45,9 +45,10 @@ class MainScene(Scene):
 
         self.font = pygame.font.SysFont('MS UI Gothic', 32)
         self.text = ui.Text('Hello\n          world!\n  おはよう', self.font,
-                            box=Rect((100, 100), (300, 200)),)
+                            pos=Vector2(100, 100),
+                            size=ui.FixedSize(300, 200))
         self.button = ui.Button(child=ui.Text('Click me', self.font),
-                                box=Rect((100, 300), (200, 80)),
+                                pos=Vector2(100, 300),
                                 callback=lambda: print('Hello from callback!'))
         self.player = Player()
 
@@ -70,12 +71,17 @@ class MainScene(Scene):
             while packet := self.client.recive():
                 print(packet)
 
+            # Update the player
+            self.player.update(deltatime)
+
             # Draw to the screen
             self.screen.fill(pygame.Color('white'))
+
+            self.player.draw(self.screen)
+
             self.text.draw(self.screen)
             self.button.draw(self.screen)
-            self.player.update(deltatime)
-            self.player.draw(self.screen)
+
             pygame.display.flip()
 
             # Yield control to the main loop
@@ -86,9 +92,7 @@ def main():
     # Give me some logging
     logging.basicConfig(level=logging.INFO)
 
-    # Set up the networking stuff
-    # TODO: This should probably be UI, however, that's
-    # a lot of work that I don't want to do right now.
+    # Set up the networking stuffs
     should_host = input('Host [y/n]? ')
 
     if 'y' in should_host.lower():
