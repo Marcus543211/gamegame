@@ -2,9 +2,11 @@ import abc
 import logging
 
 import pygame
-from pygame import Vector2, Rect
+from pygame import Vector2
+
 # Pygame skal helst initialiseres så hurtigt så muligt
-# Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype som standard parameter, så klager pygame
+# Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype
+# som standard parameter, så klager pygame.
 pygame.init()
 
 from player import Player
@@ -44,12 +46,14 @@ class MainScene(Scene):
         self.clock = pygame.time.Clock()
 
         self.font = pygame.font.SysFont('MS UI Gothic', 32)
-        self.text = ui.Text('Hello\n          world!\n  おはよう', self.font,
-                            pos=Vector2(100, 100),
-                            size=ui.FixedSize(300, 200))
+        self.text = ui.Text('Hello\nH          world!\n  おはよう', self.font,
+                            pos=Vector2(100, 100))
+        self.entry = ui.Entry(self.font, pos=Vector2(400, 100))
         self.button = ui.Button(child=ui.Text('Click me', self.font),
                                 pos=Vector2(100, 300),
                                 callback=lambda: print('Hello from callback!'))
+        self.button2 = ui.Button(pos=Vector2(400, 400),
+                                 callback=lambda: print('Hello from callback2!'))
         self.player = Player()
 
     def start(self):
@@ -59,7 +63,9 @@ class MainScene(Scene):
 
             # Handle events
             for event in pygame.event.get():
+                self.entry.handle(event)
                 self.button.handle(event)
+                self.button2.handle(event)
 
                 if event.type == pygame.QUIT:
                     return
@@ -79,8 +85,10 @@ class MainScene(Scene):
 
             self.player.draw(self.screen)
 
+            self.entry.draw(self.screen)
             self.text.draw(self.screen)
             self.button.draw(self.screen)
+            self.button2.draw(self.screen)
 
             pygame.display.flip()
 
@@ -109,7 +117,11 @@ def main():
     client = network.Client(*address)
 
     screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption('CrinnedCatters')
+    pygame.display.set_caption('Ball Bouncing')
+
+    # Make key events repeat so that the text inputs
+    # function a little better.
+    pygame.key.set_repeat(500, 36)
 
     scene = MainScene(screen, client)
 

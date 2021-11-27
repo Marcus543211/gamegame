@@ -51,16 +51,13 @@ class Widget(abc.ABC):
 
     @property
     def rect(self) -> Rect:
-        return Rect(self.pos, self.size.as_vector2())
+        return Rect(self.pos, (self.size.width, self.size.height))
 
 
 @dataclass
 class Size:
     width: int
     height: int
-
-    def as_vector2(self):
-        return Vector2(self.width, self.height)
 
 
 class FixedSize(Size):
@@ -94,7 +91,7 @@ class Button(Widget):
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
 
-        if self.rect.collidepoint(pygame.mouse.get_pos()):
+        if self.mouse_over:
             pygame.draw.rect(screen, self.highlight_color, self.rect)
 
         if self.child:
@@ -105,8 +102,13 @@ class Button(Widget):
 
     def handle(self, event: pygame.event.Event):
         if event.type == pygame.MOUSEBUTTONUP:
-            if self.rect.collidepoint(event.pos):
+            if self.mouse_over:
                 self.callback()
+
+    @property
+    def mouse_over(self) -> bool:
+        mouse_pos = pygame.mouse.get_pos()
+        return self.rect.collidepoint(mouse_pos)
 
     @property
     def pos(self) -> Vector2:
@@ -142,8 +144,169 @@ class Button(Widget):
                     size.width - 2 * padding, size.height - 2 * padding)
 
         elif isinstance(size, NaturalSize):
-            self.child.size = NaturalSize()
+            if self.child:
+                self.child.size = NaturalSize()
             self._size = NaturalSize()
+
+        else:
+            raise Exception('Unknown size type')
+
+
+class Cursor:
+    def __init__(self, index: int = 0, text: Optional[TextRenderer] = None):
+        self._index = index
+        self._text = text
+
+    @property
+    def line(self) -> int:
+        for line, (start, end) in enumerate(self._text.line_spans):
+            if start <= self.index < end:
+                return line
+
+        # If we aren't on any of the lines we must be
+        # at the very last position i.e. on the last line.
+        return len(self._text.line_spans) - 1
+
+    @line.setter
+    def line(self, line: int):
+        # TODO: Implement good line setting
+        # In most editors when you go up a line, the cursor is placed
+        # with an horizontal position that most closely matches the one
+        # you had on the previous line. Here, we just place it at the start.
+        line = clamp(line, 0, len(self._text.line_spans) - 1)
+        start, _ = self._text.line_spans[line]
+        self.index = start
+
+    @property
+    def index(self) -> int:
+        return self._index
+
+    @index.setter
+    def index(self, index: int):
+        self._index = clamp(index, 0, len(self._text.text))
+
+
+class Entry(Widget):
+    def __init__(
+            self, font: pygame.font.Font,  pos: Optional[Vector2] = None,
+            size: Size = NaturalSize()):
+        self._text = TextRenderer(Vector2(), '', font)
+        self.cursor = Cursor(text=self._text)
+        self.focused = False
+
+        self.pos = pos
+        self.size = size
+
+    def draw(self, screen: pygame.Surface):
+        super().draw(screen)
+
+        self._text.draw(screen)
+
+        if self.focused:
+            self._draw_cursor(screen)
+            pygame.draw.rect(screen, Color('red'), self.rect, width=4)
+        else:
+            pygame.draw.rect(screen, Color('black'), self.rect, width=4)
+
+    def _draw_cursor(self, screen):
+        line_start = self._text.line_spans[self.cursor.line][0]
+        linesize = self._text.font.get_linesize()
+        offset_x = sum(advance for (_, _, _, _, advance) in
+                       self._text.font.metrics(self._text.text[line_start:self.cursor.index]))
+        offset_y = linesize * self.cursor.line
+
+        cursor_pos = self._text.pos + Vector2(offset_x, offset_y)
+        pygame.draw.line(screen, Color('red'),
+                         cursor_pos,
+                         cursor_pos + Vector2(0, linesize),
+                         width=4)
+
+    def handle(self, event: pygame.event.Event):
+        if event.type == pygame.MOUSEBUTTONUP:
+            if self.rect.collidepoint(event.pos):
+                self.focused = True
+                pygame.key.start_text_input()
+            else:
+                self.focused = False
+                pygame.key.stop_text_input()
+
+        elif self.focused and event.type == pygame.KEYDOWN:
+            # Backspace
+            if event.key == pygame.K_BACKSPACE:
+                self.remove_span(self.cursor.index - 1)
+
+            # Delete
+            elif event.key == pygame.K_DELETE:
+                self.remove_span(self.cursor.index)
+
+            # Enter / Return
+            elif event.key == pygame.K_RETURN:
+                self.insert_str_at(self.cursor.index, '\n')
+
+            # Arrow keys
+            elif event.key == pygame.K_RIGHT:
+                self.cursor.index += 1
+            elif event.key == pygame.K_LEFT:
+                self.cursor.index -= 1
+            elif event.key == pygame.K_UP:
+                self.cursor.line -= 1
+            elif event.key == pygame.K_DOWN:
+                self.cursor.line += 1
+
+        # Text
+        elif self.focused and event.type == pygame.TEXTINPUT:
+            self.insert_str_at(self.cursor.index, event.text)
+
+    def remove_span(self, index: int, length: int = 1):
+        # If the index is outside the text just return
+        if 0 > index or index > len(self._text.text):
+            return
+
+        self._text.text = (self._text.text[:index]
+                           + self._text.text[index + length:])
+        if index < self.cursor.index:
+            self.cursor.index -= length
+
+    def insert_str_at(self, index: int, string: str):
+        self._text.text = self._text.text[:index] + \
+            string + self._text.text[index:]
+
+        # Move the cursor if the string was inserted before it
+        if index <= self.cursor.index:
+            self.cursor.index += len(string)
+
+    @property
+    def text(self):
+        return self._text.text
+
+    @property
+    def pos(self) -> Vector2:
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos: Vector2):
+        self._pos = pos
+        self._text.pos = pos + Vector2(10)
+
+    @property
+    def size(self) -> Size:
+        if isinstance(self._size, FixedSize):
+            return self._size
+
+        elif isinstance(self._size, NaturalSize):
+            return NaturalSize(self._text.width + 20, self._text.height + 20)
+
+        else:
+            raise Exception('Unknown size type')
+
+    @size.setter
+    def size(self, size: Size):
+        if isinstance(size, FixedSize):
+            self._size = size
+            self._text.max_width = size.width
+
+        elif isinstance(size, NaturalSize):
+            self._size = size
 
         else:
             raise Exception('Unknown size type')
@@ -154,22 +317,13 @@ class Text(Widget):
             self, text: str, font: pygame.font.Font, *,
             pos: Optional[Vector2] = None, size: Size = NaturalSize(),
             color: Color = Color('black')):
-        # TODO: Currently the height of the box is ignored.
+        self._text = TextRenderer(Vector2(), text, font, color=color)
+
+        # TODO: Currently the height is ignored.
         # Implementing scroll seems a little insane, so just
         # cutting off the bottom is probably the way to go.
-
-        self._pos = pos
-        self._size = size
-
-        max_width = size.width if isinstance(size, FixedSize) else None
-
-        if self.pos:
-            self._text = TextRenderer(
-                self.pos, text, font, color=color, max_width=max_width)
-        else:
-            # The box will be assigned later otherwise an error will be raised
-            self._text = TextRenderer(
-                Vector2(0), text, font, color=color, max_width=max_width)
+        self.pos = pos
+        self.size = size
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
@@ -191,7 +345,7 @@ class Text(Widget):
             return self._size
 
         elif isinstance(self._size, NaturalSize):
-            return NaturalSize(self._text._rendered[0].get_width(), self._text.font.get_linesize())
+            return NaturalSize(self._text.width, self._text.height)
 
         else:
             raise Exception('Unknown size type')
@@ -218,6 +372,11 @@ class TextRenderer:
         self._font = font
         self._color = color
         self._max_width = max_width
+
+        # Dirty means one or more of the properties that
+        # are used to render text have changed. It is
+        # cleared the next time the text is rendered
+        # which is probably when it is draw to the screen.
         self._dirty = True
 
         self._render()
@@ -227,9 +386,24 @@ class TextRenderer:
             self._render()
 
         line_space = self._font.get_linesize()
-        for i, line in enumerate(self._rendered):
+        for i, line in enumerate(self._rendered_lines):
             pos = self.pos + Vector2(0, i * line_space)
             surface.blit(line, pos)
+
+    @property
+    def height(self):
+        return self.font.get_linesize() * len(self._rendered_lines)
+
+    @property
+    def width(self):
+        return max((line.get_width() for line in self._rendered_lines), default=0)
+
+    @property
+    def line_spans(self):
+        if self._dirty:
+            self._render()
+
+        return self._line_spans
 
     # TODO: I feel there might be a better way to add
     # all these properties, however, my brain is fried.
@@ -273,24 +447,17 @@ class TextRenderer:
         logging.debug('TextUI rendering text')
 
         self._dirty = False
-        self._rendered = []
 
-        if self._max_width is None:
-            self._render_text(self._text)
-            return
+        # The rendered lines are the lines rendered as
+        # surfaces using self._font. The line spans are
+        # what spans of the text each line is.
+        # So for the line "Hello\nWorld", the line spans
+        # would be [(0, 6), (6, 11)] (note '\n' is one char).
+        self._rendered_lines = []
+        self._line_spans = []
 
-        # Split the text up at newlines and then render
-        # each of the given paragraphs individually.
-        # I call them paragraphs because "line" is a bit
-        # confusing when the splits are also called lines.
-        for paragraph in self._text.splitlines():
-            self._render_paragraph(paragraph)
-
-    def _render_paragraph(self, paragraph: text):
         line_start = 0
         line_end = 0
-        # The current word starts where the current lines end
-        current_word_end = 0
         i = 0
 
         # We just keep running until we get an index error
@@ -301,33 +468,62 @@ class TextRenderer:
             while True:
                 # Go to the first whitespace character or just move on
                 # if we're at the end of the string.
-                while i < len(paragraph) and not paragraph[i].isspace():
+                while i < len(self._text) and not self._text[i].isspace():
                     i += 1
-                    current_word_end += 1
 
                 # We are now at the first whitespace after the current word
-                width, _height = self._font.size(
-                    paragraph[line_start:current_word_end])
-                if width < self._max_width:
+                width, _ = self._font.size(self._text[line_start:i])
+                if self._max_width is None or width < self._max_width:
                     # If the word fits on the line add it and all the
                     # whitespace that follows it. This assumes that
                     # all whitespace is invisible but that seems like
                     # a reasonable assumption.
-                    while paragraph[i].isspace():
+                    line_end = i
+
+                    while self._text[i].isspace():
+                        # If we meet a newline character we break and start
+                        # on a new line. Handled newlines are Linux (\n),
+                        # Windows (\r\n) and old Mac (\r).
+                        # https://en.wikipedia.org/wiki/Newline#Representation
+                        if self._text[i] in ['\n', '\r']:
+                            if self._text[i:i+2] == '\r\n':
+                                i += 1
+                                line_end += 1
+
+                            i += 1
+                            line_end += 1
+
+                            # Render the current line and start on a new one
+                            self._render_line(line_start, line_end)
+                            line_start = line_end
+                            break
+
                         i += 1
-                        current_word_end += 1
-                    line_end = current_word_end
+                        line_end += 1
                 else:
                     # If the word does not fit on the line then render
                     # the current line and start a new line with the
                     # word on it.
-                    self._render_text(paragraph[line_start:line_end])
+                    self._render_line(line_start, line_end)
 
                     # New line
-                    line_start, line_end = line_end, current_word_end
+                    line_start, line_end = line_end, i
 
         except IndexError:
-            self._render_text(paragraph[line_start:current_word_end])
+            # Render all the remaining text
+            self._render_line(line_start, len(self._text))
 
-    def _render_text(self, line: str):
-        self._rendered.append(self._font.render(line, True, self._color))
+    def _render_line(self, line_start: int, line_end: int):
+        line = self._text[line_start:line_end]
+
+        # There might be a newline character(s) at the end of the line.
+        # It shows up as a box if it is rendered so we remove it here.
+        line = line.strip('\n\r')
+
+        rendered_line = self._font.render(line, True, self._color)
+        self._rendered_lines.append(rendered_line)
+        self._line_spans.append((line_start, line_end))
+
+
+def clamp(value, low, high):
+    return max(low, min(value, high))
