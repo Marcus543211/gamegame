@@ -4,10 +4,9 @@ import logging
 import pygame
 from pygame import Color, Vector2
 
-import ui
 import network
-from player import Player
-from camera import Camera
+import ui
+from scope import Scope
 
 # Pygame skal helst initialiseres så hurtigt så muligt
 # Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype
@@ -50,7 +49,7 @@ class MainScene(Scene):
         self.client = client
         self.clock = pygame.time.Clock()
 
-        self.player = Player()
+        self.scope = Scope()
 
     def start(self):
         while True:
@@ -63,17 +62,17 @@ class MainScene(Scene):
             # Handle events
             for event in events:
                 if event.type == pygame.KEYDOWN:
-                    self.client.send(event.key)
+                    self.client.send(network.KeyDownInput(event.key))
+                elif event.type == pygame.KEYUP:
+                    self.client.send(network.KeyUpInput(event.key))
 
             # Receive incoming packets
-            while packet := self.client.recive():
-                print(packet)
+            while cmd := self.client.recive():
+                cmd.execute(self.scope)
 
-            # Update the player
-            self.player.update(deltatime)
-
-            # Draw to the screen
-            self.player.draw(self.screen)
+            for player in self.scope.players.values():
+                # Draw to the screen
+                player.draw(self.screen)
 
 
 class MainMenuScene(Scene):
@@ -102,7 +101,7 @@ class MainMenuScene(Scene):
             client_button.draw(self.screen)
 
         if self.should_host:
-            server = network.EchoServer('0.0.0.0')
+            server = network.GameServer('0.0.0.0')
             host_address = ui.Text(
                 f'Connect on address: {network.get_local_ip()}:{server.port}',
                 font, pos=Vector2(10, 60))
@@ -179,10 +178,6 @@ def main():
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('Ball Bouncing')
 
-    # Make key events repeat so that the text inputs
-    # function a little better.
-    pygame.key.set_repeat(500, 36)
-
     scene = MainMenuScene(screen)
 
     # Main loop
@@ -198,6 +193,7 @@ def main():
 
         except (QuitException, StopIteration):
             break
+
 
 if __name__ == '__main__':
     main()

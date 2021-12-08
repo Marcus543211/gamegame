@@ -18,22 +18,19 @@ class Player:
         self.font = pygame.font.SysFont('MS UI Gothic', 20)
         self.last_acceleration = Vector2(0, 0)
 
-    def update(self, deltatime):
-        self.input()
+    def update(self, pressed_keys, deltatime):
+        self.input(pressed_keys)
         self.physics(deltatime)
 
-    @property
-    def input_vector(self):
-        keys = pygame.key.get_pressed()
-
+    def input_vector(self, pressed_keys):
         direction = Vector2(0, 0)
-        if keys[pygame.K_w]:
+        if pygame.K_w in pressed_keys:
             direction -= Vector2(0, 1)
-        if keys[pygame.K_a]:
+        if pygame.K_a in pressed_keys:
             direction -= Vector2(1, 0)
-        if keys[pygame.K_s]:
+        if pygame.K_s in pressed_keys:
             direction += Vector2(0, 1)
-        if keys[pygame.K_d]:
+        if pygame.K_d in pressed_keys:
             direction += Vector2(1, 0)
 
         if direction.length() != 0:
@@ -41,14 +38,14 @@ class Player:
         else:
             return Vector2(0, 0)
 
-    def input(self):
-        self.acceleration += self.input_vector * self.force
+    def input(self, keys):
+        self.acceleration += self.input_vector(keys) * self.force
 
     def physics(self, deltatime):
         # Drag
-        dragForce = self.velocity.length() ** 2 * self.drag
+        drag_force = self.velocity.length() ** 2 * self.drag
         if self.velocity.length() != 0:
-            self.acceleration -= self.velocity.normalize() * dragForce
+            self.acceleration -= self.velocity.normalize() * drag_force
 
         # Acceleration, velocity and position
         self.velocity += self.acceleration * deltatime
