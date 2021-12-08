@@ -10,6 +10,8 @@ from pygame import Color, Rect, Vector2
 
 
 # TODO: It might be cool to have a global style thing.
+# TODO: Add containers that layout widgets nicely
+# implementing a flexbox would be *chefs kiss*
 
 
 class Widget(abc.ABC):
@@ -259,7 +261,7 @@ class Entry(Widget):
 
     def remove_span(self, index: int, length: int = 1):
         # If the index is outside the text just return
-        if 0 > index or index > len(self._text.text):
+        if index < 0 or index > len(self._text.text):
             return
 
         self._text.text = (self._text.text[:index]
@@ -361,6 +363,22 @@ class Text(Widget):
 
         else:
             raise Exception('Unknown size type')
+
+    @property
+    def color(self):
+        return self._text.color
+
+    @color.setter
+    def color(self, color):
+        self._text.color = color
+
+    @property
+    def text(self):
+        return self._text.text
+
+    @text.setter
+    def text(self, text):
+        self._text.text = text
 
 
 class TextRenderer:

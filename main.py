@@ -2,16 +2,18 @@ import abc
 import logging
 
 import pygame
-from pygame import Vector2
+from pygame import Color, Vector2
+
+import ui
+import network
+from player import Player
 
 # Pygame skal helst initialiseres så hurtigt så muligt
 # Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype
 # som standard parameter, så klager pygame.
 pygame.init()
 
-from player import Player
-import network
-import ui
+font = pygame.font.SysFont('MS UI Gothic', 24)
 
 
 class QuitException(Exception):
@@ -26,17 +28,19 @@ class Scene(abc.ABC):
     def start(self):
         pass
 
-    def step(self):
+    def send(self, events):
         if not hasattr(self, '_generator'):
             self._generator = self.start()
+            # Make the generator run until the first yield
+            self._generator.send(None)
 
-        return self._generator.send(None)
+        return self._generator.send(events)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        return self.step()
+        return self.send([])
 
 
 class MainScene(Scene):
@@ -45,15 +49,6 @@ class MainScene(Scene):
         self.client = client
         self.clock = pygame.time.Clock()
 
-        self.font = pygame.font.SysFont('MS UI Gothic', 32)
-        self.text = ui.Text('Hello\nH          world!\n  おはよう', self.font,
-                            pos=Vector2(100, 100))
-        self.entry = ui.Entry(self.font, pos=Vector2(400, 100))
-        self.button = ui.Button(child=ui.Text('Click me', self.font),
-                                pos=Vector2(100, 300),
-                                callback=lambda: print('Hello from callback!'))
-        self.button2 = ui.Button(pos=Vector2(400, 400),
-                                 callback=lambda: print('Hello from callback2!'))
         self.player = Player()
 
     def start(self):
@@ -61,15 +56,11 @@ class MainScene(Scene):
             # Control the framerate
             deltatime = self.clock.tick(120) / 1000
 
+            # Yield control to the main loop and get the events
+            events = yield
+
             # Handle events
-            for event in pygame.event.get():
-                self.entry.handle(event)
-                self.button.handle(event)
-                self.button2.handle(event)
-
-                if event.type == pygame.QUIT:
-                    return
-
+            for event in events:
                 if event.type == pygame.KEYDOWN:
                     self.client.send(event.key)
 
@@ -81,40 +72,108 @@ class MainScene(Scene):
             self.player.update(deltatime)
 
             # Draw to the screen
-            self.screen.fill(pygame.Color('white'))
-
             self.player.draw(self.screen)
 
-            self.entry.draw(self.screen)
-            self.text.draw(self.screen)
-            self.button.draw(self.screen)
-            self.button2.draw(self.screen)
 
-            pygame.display.flip()
+class MainMenuScene(Scene):
+    def __init__(self, screen):
+        self.screen = screen
+        self.should_host = None
 
-            # Yield control to the main loop
-            yield
+    def set_should_host(self, should_host):
+        self.should_host = should_host
+
+    def start(self):
+        host_button = ui.Button(pos=Vector2(100, 100),
+                                child=ui.Text('Host a game', font),
+                                callback=lambda: self.set_should_host(True))
+        client_button = ui.Button(pos=Vector2(100, 200),
+                                  child=ui.Text('Join a game', font),
+                                  callback=lambda: self.set_should_host(False))
+
+        while self.should_host is None:
+            events = yield
+            for event in events:
+                host_button.handle(event)
+                client_button.handle(event)
+
+            host_button.draw(self.screen)
+            client_button.draw(self.screen)
+
+        if self.should_host:
+            server = network.EchoServer('0.0.0.0')
+            host_address = ui.Text(
+                f'Connect on address: {network.get_local_ip()}:{server.port}',
+                font, pos=Vector2(10, 60))
+
+            client = network.Client('127.0.0.1', server.port)
+        else:
+            server = None
+
+            client = yield from ClientJoinScene(self.screen)
+
+        main_scene = MainScene(self.screen, client)
+
+        try:
+            while True:
+                events = yield
+                main_scene.send(events)
+
+                if server:
+                    server.step()
+                    host_address.draw(self.screen)
+
+        except (QuitException, StopIteration) as error:
+            # Goodbye networking
+            client.close()
+            if server:
+                server.close()
+
+            # Send the exception further up
+            raise error
+
+
+class ClientJoinScene(Scene):
+    def __init__(self, screen):
+        self.screen = screen
+        self.address = None
+
+    def set_address(self, address):
+        self.address = address
+
+    def start(self):
+        msg = 'Please enter the address with port \nto connect to{}: '
+        text = ui.Text(msg.format(''),
+                       font, pos=Vector2(100, 100))
+        entry = ui.Entry(font, Vector2(100, 200))
+        join = ui.Button(Vector2(100, 300), child=ui.Text('Join', font),
+                         callback=lambda: self.set_address(entry.text))
+
+        while True:
+            if self.address is not None:
+                try:
+                    [address, port] = self.address.strip().split(':')
+                    return network.Client(address, port)
+                except (ValueError, ConnectionRefusedError):
+                    self.address = None
+                    text.color = Color('red')
+                    text.text = msg.format(' [invalid ip]')
+
+            events = yield
+
+            for event in events:
+                text.handle(event)
+                entry.handle(event)
+                join.handle(event)
+
+            text.draw(self.screen)
+            entry.draw(self.screen)
+            join.draw(self.screen)
 
 
 def main():
     # Give me some logging
     logging.basicConfig(level=logging.INFO)
-
-    # Set up the networking stuffs
-    should_host = input('Host [y/n]? ')
-
-    if 'y' in should_host.lower():
-        server = network.EchoServer('0.0.0.0')
-        address = ('127.0.0.1', server.port)
-
-        print(f'Connect on address: {network.get_local_ip()}:{server.port}')
-    else:
-        server = None
-
-        address = input('Please enter the address with port to connect to: ')
-        address = tuple(address.strip().split(':'))
-
-    client = network.Client(*address)
 
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('Ball Bouncing')
@@ -123,24 +182,21 @@ def main():
     # function a little better.
     pygame.key.set_repeat(500, 36)
 
-    scene = MainScene(screen, client)
+    scene = MainMenuScene(screen)
 
     # Main loop
     while True:
         try:
-            # Step the scene
-            scene.step()
+            events = pygame.event.get()
+            if any(event.type == pygame.QUIT for event in events):
+                break
+
+            screen.fill(pygame.Color('white'))
+            scene.send(events)
+            pygame.display.flip()
+
         except (QuitException, StopIteration):
             break
-        else:
-            # Step the server, if we have one
-            if server:
-                server.step()
-
-    # Goodbye networking
-    client.close()
-    if server:
-        server.close()
 
 
 if __name__ == '__main__':
