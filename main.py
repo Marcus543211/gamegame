@@ -7,6 +7,7 @@ from pygame import Color, Vector2
 import ui
 import network
 from player import Player
+from camera import Camera
 
 # Pygame skal helst initialiseres så hurtigt så muligt
 # Hvis vi begynder at importere klasser, som f.eks. bruger en skrifttype
@@ -197,7 +198,6 @@ def main():
 
         except (QuitException, StopIteration):
             break
-
 
 if __name__ == '__main__':
     main()

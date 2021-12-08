@@ -8,8 +8,8 @@ class Player:
     acceleration: Vector2 = Vector2(0, 0)
     velocity: Vector2 = Vector2(0, 0)
     position: Vector2 = Vector2(0, 0)
-    force: float = 200
-    drag: float = 0.004
+    force: float = 300
+    drag: float = 0.006
     #static_drag: float = 0.75
 
     def __init__(self):
