@@ -187,12 +187,50 @@ class Cursor:
     def index(self, index: int):
         self._index = clamp(index, 0, len(self._text.text))
 
+    @property
+    def window_pos(self) -> Vector2:
+        line_start = self._text.line_spans[self.line][0]
+        offset_x = sum(advance for (_, _, _, _, advance) in
+                       self._text.font.metrics(self._text.text[line_start:self.index]))
+        offset_y = self._text.linesize * self.line
+
+        return self._text.pos + Vector2(offset_x, offset_y)
+
+    @window_pos.setter
+    def window_pos(self, pos: Vector2):
+        x = clamp(pos.x - self._text.pos.x, 0, self._text.width)
+        y = clamp(pos.y - self._text.pos.y, 0, self._text.height)
+
+        line = int(y / self._text.linesize)
+        line_start, line_end = self._text.line_spans[line]
+        line_text = self._text.text[line_start:line_end]
+
+        # Try and find out what character we are at
+        offset_x = 0
+        for i, (_, _, _, _, advance) in enumerate(self._text.font.metrics(line_text)):
+            offset_x += advance
+            if x < offset_x:
+                span = i
+                break
+        else:
+            # The place the cursor is at isn't on the line so just
+            # place the cursor at the end of the line.
+
+            # The last character on the last line is one greater than
+            # the length of the text so we need to handle it here.
+            if line == len(self._text.line_spans):
+                span = len(line_text)
+            else:
+                span = len(line_text) - 1
+
+        self.index = line_start + span
+
 
 class Entry(Widget):
     def __init__(
             self, font: pygame.font.Font,  pos: Optional[Vector2] = None,
-            size: Size = NaturalSize()):
-        self._text = TextRenderer(Vector2(), '', font)
+            size: Size = NaturalSize(), text: str = ''):
+        self._text = TextRenderer(Vector2(), text, font)
         self.cursor = Cursor(text=self._text)
         self.focused = False
 
@@ -211,22 +249,17 @@ class Entry(Widget):
             pygame.draw.rect(screen, Color('black'), self.rect, width=4)
 
     def _draw_cursor(self, screen):
-        line_start = self._text.line_spans[self.cursor.line][0]
-        linesize = self._text.font.get_linesize()
-        offset_x = sum(advance for (_, _, _, _, advance) in
-                       self._text.font.metrics(self._text.text[line_start:self.cursor.index]))
-        offset_y = linesize * self.cursor.line
-
-        cursor_pos = self._text.pos + Vector2(offset_x, offset_y)
+        cursor_pos = self.cursor.window_pos
         pygame.draw.line(screen, Color('red'),
                          cursor_pos,
-                         cursor_pos + Vector2(0, linesize),
+                         cursor_pos + Vector2(0, self._text.linesize),
                          width=4)
 
     def handle(self, event: pygame.event.Event):
         if event.type == pygame.MOUSEBUTTONUP:
             if self.rect.collidepoint(event.pos):
                 self.focused = True
+                self.cursor.window_pos = Vector2(event.pos)
                 pygame.key.start_text_input()
             else:
                 self.focused = False
@@ -407,18 +440,21 @@ class TextRenderer:
         if self._dirty:
             self._render()
 
-        line_space = self._font.get_linesize()
         for i, line in enumerate(self._rendered_lines):
-            pos = self.pos + Vector2(0, i * line_space)
+            pos = self.pos + Vector2(0, i * self.linesize)
             surface.blit(line, pos)
 
     @property
     def height(self):
-        return self.font.get_linesize() * len(self._rendered_lines)
+        return self.linesize * len(self._rendered_lines)
 
     @property
     def width(self):
         return max((line.get_width() for line in self._rendered_lines), default=0)
+
+    @property
+    def linesize(self):
+        return self._font.get_linesize()
 
     @property
     def line_spans(self):
