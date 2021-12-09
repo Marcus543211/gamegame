@@ -2,7 +2,7 @@ import pygame
 from pygame import Vector2, Rect
 
 from dataclasses import dataclass, field
-
+from rectF import RectF
 
 @dataclass
 class Player:
@@ -11,11 +11,11 @@ class Player:
     position: Vector2 = field(default_factory=lambda: Vector2(0, 0))
     force: float = 3
     drag: float = 0.006
-    radius: float = 0.25
+    radius: float = 0.5
     #static_drag: float = 0.75
 
     def __post_init__(self):
-        self.debug = True
+        self.debug = False
         self.font = pygame.font.SysFont('MS UI Gothic', 20)
         self.last_acceleration = Vector2(0, 0)
 
@@ -59,9 +59,10 @@ class Player:
     @property
     def bounding_box(self):
         bottom_left = Vector2(self.position.x - self.radius, self.position.y - self.radius)
-        return Rect(bottom_left, Vector2(2 * self.radius, 2 * self.radius))
+        return RectF(bottom_left, Vector2(2 * self.radius, 2 * self.radius))
 
     def draw(self, scene):
+        print(scene.camera.world_to_pixel(self.position))
         if (scene.camera.inside(self.bounding_box)):
             pygame.draw.circle(scene.screen, (255, 0, 0), scene.camera.world_to_pixel(self.position), self.radius * scene.camera.world_to_pixel_ratio)
 

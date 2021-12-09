@@ -34,7 +34,11 @@ class RectF:
     def height(self):
         return self.size.y
 
+    #TODO: Actually make it functional
     def contains(self, other: 'RectF'):
-        return other.right < self.right and other.left > self.left and other.top > self.top and other.bottom < self.bottom
+        return True
+
+    def __repr__(self):
+        return f"{self.bottom_left}, {self.top_right}"
 
 

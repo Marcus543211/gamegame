@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from pygame import Vector2
 from pygame import Rect
 
+from rectF import RectF
+
 @dataclass
 class Camera:
     position: Vector2 = Vector2(0, 0)
-    screen_size: Vector2 = Vector2(1920.0, 1080.0)
+    screen_size: Vector2 = Vector2(800.0, 600.0)
     width: float = 10
 
     @property
@@ -19,9 +21,9 @@ class Camera:
 
     @property
     def view_rect(self):
-        return Rect(self.position - Vector2(self.width / 2.0, self.height / 2.0), Vector2(self.width / 2.0, self.height / 2.0))
+        return RectF(self.position - Vector2(self.width / 2.0, self.height / 2.0), Vector2(self.width, self.height))
     
-    def inside(self, rect: Rect):
+    def inside(self, rect: RectF):
         return self.view_rect.contains(rect)
 
     def pixel_to_world(self, v: Vector2):
