@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Player:
-    acceleration: Vector2 = field(default_factory=lambda: Vector2(0, 0))
-    velocity: Vector2 = field(default_factory=lambda: Vector2(0, 0))
-    position: Vector2 = field(default_factory=lambda: Vector2(0, 0))
+    acceleration: Vector2 = field(default_factory=Vector2)
+    velocity: Vector2 = field(default_factory=Vector2)
+    position: Vector2 = field(default_factory=Vector2)
     force: float = 3
     drag: float = 0.006
     radius: float = 0.25
@@ -58,12 +58,13 @@ class Player:
 
     @property
     def bounding_box(self):
-        bottom_left = Vector2(self.position.x - self.radius, self.position.y - self.radius)
-        return Rect(bottom_left, Vector2(2 * self.radius, 2 * self.radius))
+        bottom_left = self.position - Vector2(self.radius)
+        return Rect(bottom_left, Vector2(2 * self.radius))
 
     def draw(self, scene):
-        if (scene.camera.inside(self.bounding_box)):
-            pygame.draw.circle(scene.screen, (255, 0, 0), scene.camera.world_to_pixel(self.position), self.radius * scene.camera.world_to_pixel_ratio)
+        pygame.draw.circle(scene.screen, (255, 0, 0),
+                           scene.camera.world_to_pixel(self.position),
+                           self.radius * scene.camera.world_to_pixel_ratio)
 
         if self.debug:
             scene.screen.blit(self.font.render(
@@ -72,3 +73,5 @@ class Player:
                 f"Velocity: {self.velocity}", False, (0, 0, 0)), (0, 20))
             scene.screen.blit(self.font.render(
                 f"Acceleration: {self.last_acceleration}", False, (0, 0, 0)), (0, 40))
+            scene.screen.blit(self.font.render(
+                f"World position: {scene.camera.world_to_pixel(self.position)}", False, (0, 0, 0)), (0, 60))

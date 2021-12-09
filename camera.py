@@ -1,16 +1,17 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pygame import Vector2
 from pygame import Rect
 
+
 @dataclass
 class Camera:
-    position: Vector2 = Vector2(0, 0)
-    screen_size: Vector2 = Vector2(1920.0, 1080.0)
+    position: Vector2 = field(default_factory=Vector2)
+    screen_size: Vector2 = field(default_factory=lambda: Vector2(800, 600))
     width: float = 10
 
     @property
-    def height(self): 
+    def height(self):
         return self.width * self.screen_size.y / self.screen_size.x
 
     @property
@@ -19,20 +20,18 @@ class Camera:
 
     @property
     def view_rect(self):
-        return Rect(self.position - Vector2(self.width / 2.0, self.height / 2.0), Vector2(self.width / 2.0, self.height / 2.0))
-    
+        return Rect(self.position - self.size / 2, self.size / 2)
+
     def inside(self, rect: Rect):
         return self.view_rect.contains(rect)
 
     def pixel_to_world(self, v: Vector2):
-        x = v.x / self.screen_size.x * self.width  - self.width / 2  + self.position.x
+        x = v.x / self.screen_size.x * self.width - self.width / 2 + self.position.x
         y = v.y / self.screen_size.y * self.height - self.height / 2 + self.position.y
         return Vector2(x, y)
-        
+
     def world_to_pixel(self, v: Vector2):
-        x = (v.x - self.position.x + self.width / 2)  * self.screen_size.x / self.width
-        y = (v.y - self.position.y + self.height / 2) * self.screen_size.y / self.height
-        return Vector2(x, y)
+        return (v - self.position + self.size / 2) * self.world_to_pixel_ratio
 
     @property
     def pixel_to_world_ratio(self):
@@ -41,4 +40,3 @@ class Camera:
     @property
     def world_to_pixel_ratio(self):
         return self.screen_size.x / self.width
-    
