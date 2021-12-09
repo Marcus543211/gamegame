@@ -1,4 +1,5 @@
 import abc
+import atexit
 import logging
 
 import pygame
@@ -87,10 +88,16 @@ class MainMenuScene(Scene):
         self.screen = screen
         self.should_host = None
 
+        self.server = None
+        self.client = None
+
+        atexit.register(self.close)
+
     def set_should_host(self, should_host):
         self.should_host = should_host
 
     def start(self):
+        # TODO: Make a UI container (flexbox) and UI container scene
         host_button = ui.Button(pos=Vector2(100, 100),
                                 child=ui.Text('Host a game', font),
                                 callback=lambda: self.set_should_host(True))
@@ -108,38 +115,33 @@ class MainMenuScene(Scene):
             client_button.draw(self.screen)
 
         if self.should_host:
-            server = network.GameServer('0.0.0.0')
+            self.server = network.GameServer('0.0.0.0')
+            self.client = network.Client('127.0.0.1', self.server.port)
+
             host_address = ui.Text(
-                f'Connect on address: {network.get_local_ip()}:{server.port}',
-                font, pos=Vector2(10, 60))
+                f'Connect on address: {network.get_local_ip()}:{self.server.port}',
+                font, pos=Vector2(10, 200))
 
-            client = network.Client('127.0.0.1', server.port)
         else:
-            server = None
+            self.client = yield from ClientJoinScene(self.screen)
 
-            client = yield from ClientJoinScene(self.screen)
+        main_scene = MainScene(self.screen, self.client)
 
-        main_scene = MainScene(self.screen, client)
+        while True:
+            events = yield
+            main_scene.send(events)
 
-        try:
-            while True:
-                events = yield
-                main_scene.send(events)
+            if self.server:
+                self.server.step()
+                host_address.draw(self.screen)
 
-                if server:
-                    server.step()
-                    host_address.draw(self.screen)
+    def close(self):
+        # Goodbye networking
+        if self.client:
+            self.client.close()
 
-        except (QuitException, StopIteration) as error:
-            # Goodbye networking
-            # This is never actually called. Maybe use:
-            # https://docs.python.org/3/library/atexit.html
-            client.close()
-            if server:
-                server.close()
-
-            # Send the exception further up
-            raise error
+        if self.server:
+            self.server.close()
 
 
 class ClientJoinScene(Scene):
@@ -152,11 +154,11 @@ class ClientJoinScene(Scene):
 
     def start(self):
         msg = 'Please enter the address with port \nto connect to{}: '
-        text = ui.Text(msg.format(''),
-                       font, pos=Vector2(100, 100))
-        entry = ui.Entry(font, Vector2(100, 200))
-        entry.text = '127.0.0.1:'
-        join = ui.Button(Vector2(100, 300), child=ui.Text('Join', font),
+
+        text = ui.Text(msg.format(''), font, pos=Vector2(100, 100))
+        entry = ui.Entry(font, Vector2(100, 200), text='127.0.0.1:')
+        join = ui.Button(Vector2(100, 300),
+                         child=ui.Text('Join', font),
                          callback=lambda: self.set_address(entry.text))
 
         while True:
@@ -185,15 +187,18 @@ def main():
     # Give me some logging
     logging.basicConfig(level=logging.INFO)
 
+    # Setup pygame
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('Ball Bouncing')
 
+    # Create our main scene
     scene = MainMenuScene(screen)
 
     # Main loop
     while True:
         try:
             events = pygame.event.get()
+
             if any(event.type == pygame.QUIT for event in events):
                 break
 

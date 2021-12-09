@@ -110,7 +110,7 @@ class Server(abc.ABC):
         while True:
             try:
                 data, addr = self._socket.recvfrom(4096)
-            except ConnectionResetError as error:
+            except ConnectionResetError:
                 continue
             except BlockingIOError:
                 return
