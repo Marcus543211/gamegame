@@ -19,7 +19,7 @@ class Camera:
 
     @property
     def view_rect(self):
-        return Rect(self.position - Vector2(self.width, self.height), Vector2(self.width, self.height))
+        return Rect(self.position - Vector2(self.width / 2.0, self.height / 2.0), Vector2(self.width / 2.0, self.height / 2.0))
     
     def inside(self, rect: Rect):
         return self.view_rect.contains(rect)
@@ -33,4 +33,12 @@ class Camera:
         x = (v.x - self.position.x + self.width / 2)  * self.screen_size.x / self.width
         y = (v.y - self.position.y + self.height / 2) * self.screen_size.y / self.height
         return Vector2(x, y)
+
+    @property
+    def pixel_to_world_ratio(self):
+        return self.width / self.screen_size.x
+
+    @property
+    def world_to_pixel_ratio(self):
+        return self.screen_size.x / self.width
     

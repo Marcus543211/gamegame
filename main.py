@@ -6,6 +6,8 @@ from pygame import Color, Vector2
 
 import network
 import ui
+
+from camera import Camera
 from scope import Scope
 
 # Pygame skal helst initialiseres så hurtigt så muligt
@@ -46,6 +48,7 @@ class Scene(abc.ABC):
 class MainScene(Scene):
     def __init__(self, screen, client):
         self.screen = screen
+        self.camera = Camera()
         self.client = client
         self.clock = pygame.time.Clock()
 
@@ -72,7 +75,7 @@ class MainScene(Scene):
 
             for player in self.scope.players.values():
                 # Draw to the screen
-                player.draw(self.screen)
+                player.draw(self)
 
 
 class MainMenuScene(Scene):

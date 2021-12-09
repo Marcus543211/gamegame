@@ -1,5 +1,5 @@
 import pygame
-from pygame import Vector2
+from pygame import Vector2, Rect
 
 from dataclasses import dataclass, field
 
@@ -9,8 +9,9 @@ class Player:
     acceleration: Vector2 = field(default_factory=lambda: Vector2(0, 0))
     velocity: Vector2 = field(default_factory=lambda: Vector2(0, 0))
     position: Vector2 = field(default_factory=lambda: Vector2(0, 0))
-    force: float = 300
+    force: float = 3
     drag: float = 0.006
+    radius: float = 0.25
     #static_drag: float = 0.75
 
     def __post_init__(self):
@@ -55,13 +56,19 @@ class Player:
         self.last_acceleration = self.acceleration
         self.acceleration = Vector2(0, 0)
 
-    def draw(self, screen):
-        pygame.draw.circle(screen, (255, 0, 0), self.position, 50)
+    @property
+    def bounding_box(self):
+        bottom_left = Vector2(self.position.x - self.radius, self.position.y - self.radius)
+        return Rect(bottom_left, Vector2(2 * self.radius, 2 * self.radius))
+
+    def draw(self, scene):
+        if (scene.camera.inside(self.bounding_box)):
+            pygame.draw.circle(scene.screen, (255, 0, 0), scene.camera.world_to_pixel(self.position), self.radius * scene.camera.world_to_pixel_ratio)
 
         if self.debug:
-            screen.blit(self.font.render(
+            scene.screen.blit(self.font.render(
                 f"Position: {self.position}", False, (0, 0, 0)), (0, 0))
-            screen.blit(self.font.render(
+            scene.screen.blit(self.font.render(
                 f"Velocity: {self.velocity}", False, (0, 0, 0)), (0, 20))
-            screen.blit(self.font.render(
+            scene.screen.blit(self.font.render(
                 f"Acceleration: {self.last_acceleration}", False, (0, 0, 0)), (0, 40))
