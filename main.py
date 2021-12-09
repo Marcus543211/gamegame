@@ -54,7 +54,7 @@ class MainScene(Scene):
     def start(self):
         while True:
             # Control the framerate
-            deltatime = self.clock.tick(120) / 1000
+            self.clock.tick(120)
 
             # Yield control to the main loop and get the events
             events = yield
@@ -66,12 +66,15 @@ class MainScene(Scene):
                 elif event.type == pygame.KEYUP:
                     self.client.send(network.KeyUpInput(event.key))
 
+            # Ping the server so it doesn't disconnect us
+            self.client.send(network.Ping())
+
             # Receive incoming packets
             while cmd := self.client.recive():
                 cmd.execute(self.scope)
 
+            # Draw to the screen
             for player in self.scope.players.values():
-                # Draw to the screen
                 player.draw(self.screen)
 
 
@@ -125,6 +128,8 @@ class MainMenuScene(Scene):
 
         except (QuitException, StopIteration) as error:
             # Goodbye networking
+            # This is never actually called. Maybe use:
+            # https://docs.python.org/3/library/atexit.html
             client.close()
             if server:
                 server.close()
@@ -146,6 +151,7 @@ class ClientJoinScene(Scene):
         text = ui.Text(msg.format(''),
                        font, pos=Vector2(100, 100))
         entry = ui.Entry(font, Vector2(100, 200))
+        entry.text = '127.0.0.1:'
         join = ui.Button(Vector2(100, 300), child=ui.Text('Join', font),
                          callback=lambda: self.set_address(entry.text))
 
@@ -153,8 +159,8 @@ class ClientJoinScene(Scene):
             if self.address is not None:
                 try:
                     [address, port] = self.address.strip().split(':')
-                    return network.Client(address, port)
-                except (ValueError, ConnectionRefusedError):
+                    return network.Client(address, int(port))
+                except (ValueError, OSError):
                     self.address = None
                     text.color = Color('red')
                     text.text = msg.format(' [invalid ip]')

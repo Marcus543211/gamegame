@@ -278,8 +278,12 @@ class Entry(Widget):
             self.cursor.index += len(string)
 
     @property
-    def text(self):
+    def text(self) -> str:
         return self._text.text
+
+    @text.setter
+    def text(self, text: str):
+        self._text.text = text
 
     @property
     def pos(self) -> Vector2:
