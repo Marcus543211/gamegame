@@ -1,13 +1,17 @@
 from dataclasses import dataclass, field
 
-from pygame import Vector2
-from pygame import Rect
+import pygame
+from pygame import Rect, Vector2
+
+
+def get_screen_size() -> Vector2:
+    return Vector2(pygame.display.get_surface().get_size())
 
 
 @dataclass
 class Camera:
     position: Vector2 = field(default_factory=Vector2)
-    screen_size: Vector2 = field(default_factory=lambda: Vector2(800, 600))
+    screen_size: Vector2 = field(default_factory=get_screen_size)
     width: float = 10
 
     @property
@@ -25,13 +29,13 @@ class Camera:
     def inside(self, rect: Rect):
         return self.view_rect.contains(rect)
 
-    def pixel_to_world(self, v: Vector2):
-        x = v.x / self.screen_size.x * self.width - self.width / 2 + self.position.x
-        y = v.y / self.screen_size.y * self.height - self.height / 2 + self.position.y
+    def pixel_to_world(self, pos: Vector2):
+        x = pos.x / self.screen_size.x * self.width - self.width / 2 + self.position.x
+        y = pos.y / self.screen_size.y * self.height - self.height / 2 + self.position.y
         return Vector2(x, y)
 
-    def world_to_pixel(self, v: Vector2):
-        return (v - self.position + self.size / 2) * self.world_to_pixel_ratio
+    def world_to_pixel(self, pos: Vector2):
+        return (pos - self.position + self.size / 2) * self.world_to_pixel_ratio
 
     @property
     def pixel_to_world_ratio(self):

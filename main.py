@@ -46,13 +46,29 @@ class Scene(abc.ABC):
         return self.send([])
 
 
+class UiScene(Scene):
+    def __init__(self, screen, widgets: list[ui.Widget]):
+        self.screen = screen
+        self.widgets = widgets
+
+    def start(self):
+        while True:
+            events = yield
+            for event in events:
+                for widget in self.widgets:
+                    widget.handle(event)
+
+            for widget in self.widgets:
+                widget.draw(self.screen)
+
+
 class MainScene(Scene):
     def __init__(self, screen, client):
         self.screen = screen
-        self.camera = Camera()
         self.client = client
-        self.clock = pygame.time.Clock()
 
+        self.clock = pygame.time.Clock()
+        self.camera = Camera()
         self.scope = Scope()
 
     def start(self):
@@ -70,6 +86,10 @@ class MainScene(Scene):
                 elif event.type == pygame.KEYUP:
                     self.client.send(network.KeyUpInput(event.key))
 
+                # Resize the camera if the window resizes
+                elif event.type == pygame.VIDEORESIZE:
+                    self.camera.screen_size = Vector2(event.size)
+
             # Ping the server so it doesn't disconnect us
             self.client.send(network.Ping())
 
@@ -77,9 +97,13 @@ class MainScene(Scene):
             while cmd := self.client.recive():
                 cmd.execute(self.scope)
 
+            # Camera follows the player
+            #player = self.scope.players.get(self.client.address)
+            # if player:
+            #    self.camera.position = player.position
+
             # Draw to the screen
             for player in self.scope.players.values():
-                # Draw to the screen
                 player.draw(self)
 
 
@@ -97,7 +121,6 @@ class MainMenuScene(Scene):
         self.should_host = should_host
 
     def start(self):
-        # TODO: Make a UI container (flexbox) and UI container scene
         host_button = ui.Button(pos=Vector2(100, 100),
                                 child=ui.Text('Host a game', font),
                                 callback=lambda: self.set_should_host(True))
@@ -105,22 +128,19 @@ class MainMenuScene(Scene):
                                   child=ui.Text('Join a game', font),
                                   callback=lambda: self.set_should_host(False))
 
+        ui_scene = UiScene(self.screen, [host_button, client_button])
+
         while self.should_host is None:
             events = yield
-            for event in events:
-                host_button.handle(event)
-                client_button.handle(event)
-
-            host_button.draw(self.screen)
-            client_button.draw(self.screen)
+            ui_scene.send(events)
 
         if self.should_host:
             self.server = network.GameServer('0.0.0.0')
-            self.client = network.Client('127.0.0.1', self.server.port)
+            self.client = network.Client('127.0.0.1')
 
             host_address = ui.Text(
-                f'Connect on address: {network.get_local_ip()}:{self.server.port}',
-                font, pos=Vector2(10, 200))
+                f'Connect on address: {network.get_local_ip()}',
+                font, pos=Vector2(10, self.screen.get_height() - 40))
 
         else:
             self.client = yield from ClientJoinScene(self.screen)
@@ -153,34 +173,31 @@ class ClientJoinScene(Scene):
         self.address = address
 
     def start(self):
-        msg = 'Please enter the address with port \nto connect to{}: '
+        msg = 'Please enter the address with port to connect to{}: '
 
-        text = ui.Text(msg.format(''), font, pos=Vector2(100, 100))
+        text = ui.Text(msg.format(''), font)
+        box = ui.ConstrainedBox(text, ui.Constraints(max_width=400),
+                                pos=Vector2(100, 100))
         entry = ui.Entry(font, Vector2(100, 200), text='127.0.0.1:')
         join = ui.Button(Vector2(100, 300),
                          child=ui.Text('Join', font),
                          callback=lambda: self.set_address(entry.text))
 
+        ui_scene = UiScene(self.screen, [box, entry, join])
+
         while True:
             if self.address is not None:
                 try:
-                    [address, port] = self.address.strip().split(':')
-                    return network.Client(address, int(port))
+                    address = self.address.strip()
+                    return network.Client(address)
+
                 except (ValueError, OSError):
                     self.address = None
                     text.color = Color('red')
                     text.text = msg.format(' [invalid ip]')
 
             events = yield
-
-            for event in events:
-                text.handle(event)
-                entry.handle(event)
-                join.handle(event)
-
-            text.draw(self.screen)
-            entry.draw(self.screen)
-            join.draw(self.screen)
+            ui_scene.send(events)
 
 
 def main():

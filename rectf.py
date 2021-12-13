@@ -38,4 +38,5 @@ class Rectf:
         return self.size.y
 
     def contains(self, other: Rectf):
-        return other.right < self.right and other.left > self.left and other.top > self.top and other.bottom < self.bottom
+        return other.right < self.right and other.left > self.left \
+            and other.top > self.top and other.bottom < self.bottom

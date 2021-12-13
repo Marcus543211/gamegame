@@ -1,7 +1,7 @@
+from dataclasses import dataclass, field
+
 import pygame
 from pygame import Vector2, Rect
-
-from dataclasses import dataclass, field
 
 
 @dataclass
@@ -68,10 +68,10 @@ class Player:
 
         if self.debug:
             scene.screen.blit(self.font.render(
-                f"Position: {self.position}", False, (0, 0, 0)), (0, 0))
+                f"Position: {self.position}", False, (0, 0, 0)), (10, 0))
             scene.screen.blit(self.font.render(
-                f"Velocity: {self.velocity}", False, (0, 0, 0)), (0, 20))
+                f"Velocity: {self.velocity}", False, (0, 0, 0)), (10, 20))
             scene.screen.blit(self.font.render(
-                f"Acceleration: {self.last_acceleration}", False, (0, 0, 0)), (0, 40))
+                f"Acceleration: {self.last_acceleration}", False, (0, 0, 0)), (10, 40))
             scene.screen.blit(self.font.render(
-                f"World position: {scene.camera.world_to_pixel(self.position)}", False, (0, 0, 0)), (0, 60))
+                f"World position: {scene.camera.world_to_pixel(self.position)}", False, (0, 0, 0)), (10, 60))

@@ -24,74 +24,70 @@ def get_local_ip():
 PROTOCOL_ID = 718420690
 PROTOCOL_HEADER = PROTOCOL_ID.to_bytes(4, byteorder='little')
 
+PORT = 39311
+
 
 class Client:
-    def __init__(self, address, port, blocking=False):
-        self.host = (address, port)
+    def __init__(self, address: str, blocking: bool = False):
+        self.host = address
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind(('127.0.0.1', 0))
         self._socket.setblocking(blocking)
 
+    @property
+    def address(self):
+        return self._socket.getsockname()[0]
+
     def recive(self):
         try:
-            data, addr = self._socket.recvfrom(4096)
+            data, address = self._socket.recvfrom(4096)
         except BlockingIOError:
             return None
 
-        if addr == self.host and data.startswith(PROTOCOL_HEADER):
+        if address[0] == self.host and data.startswith(PROTOCOL_HEADER):
             data = data.removeprefix(PROTOCOL_HEADER)
             return pickle.loads(data)
+
+        return None
 
     def send(self, obj):
         # I could create a class that buffers the pickler and unpickler with BytesIO
         data = PROTOCOL_HEADER + pickle.dumps(obj)
-        self._socket.sendto(data, self.host)
+        self._socket.sendto(data, (self.host, PORT))
 
     def close(self):
         self._socket.close()
 
 
 class Server(abc.ABC):
-    def __init__(self, address, port=0, client_timeout=2, sleep=0.01):
-        self.sleep = sleep
+    def __init__(self, address: str, client_timeout: float = 2):
         self.clients = []
         self.timeouts = {}
         self.client_timeout = client_timeout
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind((address, port))
+        self._socket.bind((address, PORT))
         self._socket.setblocking(False)
 
-        logging.info("Server created on: %s:%s", self.address, self.port)
+        logging.info("Server created on: %s", self.address)
 
     @property
     def address(self):
         return self._socket.getsockname()[0]
 
-    @property
-    def port(self):
-        return self._socket.getsockname()[1]
-
     def update(self):
         pass
 
-    def handle_connect(self, address):
+    def handle_connect(self, address: tuple[str, int]):
         pass
 
-    def handle_disconnect(self, address):
+    def handle_disconnect(self, address: tuple[str, int]):
         pass
 
     @abc.abstractmethod
-    def handle(self, address, data):
+    def handle(self, address: tuple[str, int], data):
         pass
-
-    def serve(self):
-        logging.info("Server started serving")
-
-        while True:
-            self.step()
-            time.sleep(self.sleep)
 
     def close(self):
         logging.info("Server was closed")
@@ -102,26 +98,27 @@ class Server(abc.ABC):
         self._check_disconnects()
         self.update()
 
-    def sendto(self, address, data):
+    def sendto(self, address: tuple[str, int], data):
         data = PROTOCOL_HEADER + data
         self._socket.sendto(data, address)
 
     def _handle_messages(self):
         while True:
             try:
-                data, addr = self._socket.recvfrom(4096)
+                data, address = self._socket.recvfrom(4096)
             except ConnectionResetError:
                 continue
             except BlockingIOError:
                 return
 
-            logging.debug("Server received %s from: %s", data, addr)
+            logging.debug("Server received %s from: %s", data, address)
+
             if data.startswith(PROTOCOL_HEADER):
                 data = data.removeprefix(PROTOCOL_HEADER)
-                if addr in self.clients:
-                    self._handle_message(addr, data)
+                if address in self.clients:
+                    self._handle_message(address, data)
                 else:
-                    self._handle_connect(addr, data)
+                    self._handle_connect(address, data)
 
     def _check_disconnects(self):
         timeouts = []
@@ -133,18 +130,18 @@ class Server(abc.ABC):
         for address in timeouts:
             self._handle_disconnect(address)
 
-    def _handle_message(self, address, data):
+    def _handle_message(self, address: tuple[str, int], data):
         self.timeouts[address] = time.time()
         self.handle(address, data)
 
-    def _handle_connect(self, address, data):
+    def _handle_connect(self, address: tuple[str, int], data):
         logging.debug("Server accepted client: %s", address)
         self.clients.append(address)
         self.handle_connect(address)
 
         self._handle_message(address, data)
 
-    def _handle_disconnect(self, address):
+    def _handle_disconnect(self, address: tuple[str, int]):
         logging.debug("Server lost client: %s", address)
         self.clients.remove(address)
         del self.timeouts[address]
@@ -158,8 +155,8 @@ class EchoServer(Server):
 
 
 class GameServer(Server):
-    def __init__(self, address, port=0):
-        super().__init__(address, port=port)
+    def __init__(self, address: str):
+        super().__init__(address)
 
         self.scope = Scope()
         # Pressed keys is a mapping of the players to their set of pressed keys
@@ -178,7 +175,7 @@ class GameServer(Server):
             cmd = SetPositionCommand(address, player.position)
             self.send_command(cmd)
 
-    def handle_connect(self, new_address):
+    def handle_connect(self, new_address: tuple[str, int]):
         self.scope.players[new_address] = Player()
         self.pressed_keys[new_address] = set()
 
@@ -192,24 +189,24 @@ class GameServer(Server):
                 cmd = AddPlayerCommand(address)
                 self.sendto(address, pickle.dumps(cmd))
 
-    def handle_disconnect(self, address):
+    def handle_disconnect(self, address: tuple[str, int]):
         del self.scope.players[address]
         del self.pressed_keys[address]
 
         cmd = RemovePlayerCommand(address)
         self.send_command(cmd)
 
-    def handle(self, address, data):
-        input = pickle.loads(data)
+    def handle(self, address: tuple[str, int], data):
+        input_ = pickle.loads(data)
 
-        if isinstance(input, KeyDownInput):
-            self.pressed_keys[address].add(input.key)
-        elif isinstance(input, KeyUpInput):
-            self.pressed_keys[address].discard(input.key)
-        elif isinstance(input, Ping):
+        if isinstance(input_, KeyDownInput):
+            self.pressed_keys[address].add(input_.key)
+        elif isinstance(input_, KeyUpInput):
+            self.pressed_keys[address].discard(input_.key)
+        elif isinstance(input_, Ping):
             pass
         else:
-            raise Exception(f'Server recived unknown object: {input}')
+            raise Exception(f'Server recived unknown object: {input_}')
 
     def send_command(self, cmd: Command):
         for address in self.clients:
@@ -225,7 +222,7 @@ class Command(abc.ABC):
 
 @dataclass
 class AddPlayerCommand(Command):
-    address: tuple[str, int]
+    address: str
 
     def execute(self, scope: Scope):
         scope.players[self.address] = Player()
@@ -233,7 +230,7 @@ class AddPlayerCommand(Command):
 
 @dataclass
 class RemovePlayerCommand(Command):
-    address: tuple[str, int]
+    address: str
 
     def execute(self, scope: Scope):
         del scope.players[self.address]
@@ -241,7 +238,7 @@ class RemovePlayerCommand(Command):
 
 @dataclass
 class SetPositionCommand(Command):
-    address: tuple[str, int]
+    address: str
     position: Vector2
 
     def execute(self, scope: Scope):
