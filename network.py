@@ -32,7 +32,6 @@ class Client:
         self.host = address
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind(('127.0.0.1', 0))
         self._socket.setblocking(blocking)
 
     @property
