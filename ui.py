@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import enum
 import logging
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -28,6 +29,9 @@ class Widget(abc.ABC):
         if self.pos is None:
             raise Exception('Widget cannot be drawn without a position')
 
+        # Debug border!
+        #pygame.draw.rect(screen, Color('green'), self.rect, 2)
+
     def handle(self, event: pygame.event.Event):
         pass
 
@@ -41,42 +45,105 @@ class Widget(abc.ABC):
     def pos(self, pos: Vector2):
         pass
 
+    # NOTE: Size is propagated up while constraints are propagated down.
+    # This means that the size of a container should depend on its child(ren)
+    # while a non-container should save its constraints and apply them.
     @property
     @abc.abstractmethod
     def size(self) -> Size:
         pass
 
-    @size.setter
     @abc.abstractmethod
-    def size(self, size: Size):
-        pass
+    def _set_constraints(self, constraints: Constraints):
+        """
+        Sets the constraints of a widget.
+        This method should only be called by containers/parents.
+        """
 
     @property
     def rect(self) -> Rect:
         return Rect(self.pos, (self.size.width, self.size.height))
 
 
-@dataclass
+@dataclass(frozen=True)
 class Size:
     width: int
     height: int
 
 
-class FixedSize(Size):
-    pass
+@dataclass(frozen=True)
+class Constraints:
+    max_width: Optional[int] = None
+    min_width: Optional[int] = None
+
+    max_height: Optional[int] = None
+    min_height: Optional[int] = None
+
+    def constrain(self, size: Size) -> Size:
+        return Size(
+            width=clamp_filted(size.width, self.min_width, self.max_width),
+            height=clamp_filted(size.height, self.min_height, self.max_height),
+        )
+
+    def union(self, other: Constraints) -> Constraints:
+
+        return Constraints(
+            max_width=min_filtered(self.max_width, other.max_width),
+            min_width=max_filtered(self.min_width, other.min_width),
+            max_height=min_filtered(self.max_height, other.max_height),
+            min_height=max_filtered(self.min_height, other.min_height),
+        )
 
 
-@dataclass
-class NaturalSize(Size):
-    """A natural size means that the widget itself will choose its size"""
-    width: Optional[int] = None
-    height: Optional[int] = None
+class ConstrainedBox(Widget):
+    def __init__(
+            self, child: Widget, constraints: Constraints,
+            pos: Optional[Vector2] = None):
+        self._constraints = constraints
+        self._parent_constraints = Constraints()
+
+        self.child = child
+        self.pos = pos
+
+    def draw(self, screen: pygame.Surface):
+        super().draw(screen)
+        self.child.draw(screen)
+
+    def handle(self, event: pygame.event.Event):
+        self.child.handle(event)
+
+    @property
+    def child(self) -> Widget:
+        return self._child
+
+    @child.setter
+    def child(self, child: Widget):
+        constraints = self._constraints.union(self._parent_constraints)
+
+        self._child = child
+        self._child._set_constraints(constraints)
+
+    @property
+    def pos(self) -> Vector2:
+        return self.child.pos
+
+    @pos.setter
+    def pos(self, pos: Vector2):
+        self.child.pos = pos
+
+    @property
+    def size(self) -> Size:
+        return self.child.size
+
+    def _set_constraints(self, constraints: Constraints):
+        self._parent_constraints = constraints
 
 
 class Button(Widget):
     def __init__(
-            self, pos: Optional[Vector2] = None,  size: Size = NaturalSize(),
-            child: Optional[Widget] = None, callback: Optional[Callable] = lambda: None):
+            self, pos: Optional[Vector2] = None,
+            child: Optional[Widget] = None,
+            callback: Optional[Callable] = lambda: None):
         self.child = child
         self.callback = callback
 
@@ -85,10 +152,10 @@ class Button(Widget):
         self.border_color = Color('black')
         self.highlight_color = Color('lightblue')
 
-        # We're setting the size and position at the end because it
-        # will call the setter and so it needs the other variables to exist.
+        # We're setting the position at the end because it
+        # will call the setter which needs the other variables to exist.
         self.pos = pos
-        self.size = size
+        self._set_constraints(Constraints())
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
@@ -106,6 +173,8 @@ class Button(Widget):
         if event.type == pygame.MOUSEBUTTONUP:
             if self.mouse_over:
                 self.callback()
+
+        self.child.handle(event)
 
     @property
     def mouse_over(self) -> bool:
@@ -125,33 +194,19 @@ class Button(Widget):
 
     @property
     def size(self) -> Size:
-        if isinstance(self._size, FixedSize):
-            return self._size
-
-        elif isinstance(self._size, NaturalSize):
-            child_size = self.child.size if self.child else FixedSize(0, 0)
-            padding = self.border_width + self.padding
-            return NaturalSize(child_size.width + 2 * padding, child_size.height + 2 * padding)
-
+        if self.child:
+            size = self.child.size
         else:
-            raise Exception('Unknown size type')
+            size = self._constraints.constrain(Size(0, 0))
 
-    @size.setter
-    def size(self, size: Size):
-        if isinstance(size, FixedSize):
-            self._size = size
-            if self.child:
-                padding = self.border_width + self.padding
-                self.child.size = FixedSize(
-                    size.width - 2 * padding, size.height - 2 * padding)
+        padding = self.border_width + self.padding
+        return Size(size.width + 2 * padding,  size.height + 2 * padding)
 
-        elif isinstance(size, NaturalSize):
-            if self.child:
-                self.child.size = NaturalSize()
-            self._size = NaturalSize()
+    def _set_constraints(self, constraints: Constraints):
+        self._constraints = constraints
 
-        else:
-            raise Exception('Unknown size type')
+        if self.child:
+            self.child._set_constraints(constraints)
 
 
 class Cursor:
@@ -171,13 +226,13 @@ class Cursor:
 
     @line.setter
     def line(self, line: int):
-        # TODO: Implement good line setting
-        # In most editors when you go up a line, the cursor is placed
-        # with an horizontal position that most closely matches the one
-        # you had on the previous line. Here, we just place it at the start.
-        line = clamp(line, 0, len(self._text.line_spans) - 1)
-        start, _ = self._text.line_spans[line]
-        self.index = start
+        # When moving up a line you'd like to keep
+        # the cursors x-position mostly the same.
+        # This is a little hacky but it mostly works.
+        # It does not work over multiple lines but it's ok.
+        pos = self.window_pos
+        pos.y += self._text.linesize * (line - self.line)
+        self.window_pos = pos
 
     @property
     def index(self) -> int:
@@ -198,18 +253,18 @@ class Cursor:
 
     @window_pos.setter
     def window_pos(self, pos: Vector2):
-        x = clamp(pos.x - self._text.pos.x, 0, self._text.width)
-        y = clamp(pos.y - self._text.pos.y, 0, self._text.height)
+        offset = pos - self._text.pos
 
-        line = int(y / self._text.linesize)
+        line = clamp(int(offset.y / self._text.linesize),
+                     0, len(self._text.line_spans) - 1)
         line_start, line_end = self._text.line_spans[line]
         line_text = self._text.text[line_start:line_end]
 
         # Try and find out what character we are at
-        offset_x = 0
+        line_width = 0
         for i, (_, _, _, _, advance) in enumerate(self._text.font.metrics(line_text)):
-            offset_x += advance
-            if x < offset_x:
+            line_width += advance
+            if offset.x < line_width:
                 span = i
                 break
         else:
@@ -218,7 +273,7 @@ class Cursor:
 
             # The last character on the last line is one greater than
             # the length of the text so we need to handle it here.
-            if line == len(self._text.line_spans):
+            if line == len(self._text.line_spans) - 1:
                 span = len(line_text)
             else:
                 span = len(line_text) - 1
@@ -228,14 +283,14 @@ class Cursor:
 
 class Entry(Widget):
     def __init__(
-            self, font: pygame.font.Font,  pos: Optional[Vector2] = None,
-            size: Size = NaturalSize(), text: str = ''):
+            self, font: pygame.font.Font,
+            pos: Optional[Vector2] = None, text: str = ''):
         self._text = TextRenderer(Vector2(), text, font)
         self.cursor = Cursor(text=self._text)
         self.focused = False
 
         self.pos = pos
-        self.size = size
+        self._set_constraints(Constraints())
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
@@ -329,40 +384,28 @@ class Entry(Widget):
 
     @property
     def size(self) -> Size:
-        if isinstance(self._size, FixedSize):
-            return self._size
+        return self._constraints.constrain(Size(
+            self._text.width + 20,
+            self._text.height + 20,
+        ))
 
-        elif isinstance(self._size, NaturalSize):
-            return NaturalSize(self._text.width + 20, self._text.height + 20)
-
-        else:
-            raise Exception('Unknown size type')
-
-    @size.setter
-    def size(self, size: Size):
-        if isinstance(size, FixedSize):
-            self._size = size
-            self._text.max_width = size.width
-
-        elif isinstance(size, NaturalSize):
-            self._size = size
-
-        else:
-            raise Exception('Unknown size type')
+    def _set_constraints(self, constraints: Constraints):
+        self._constraints = constraints
+        self._text.max_width = constraints.max_width - 20 \
+            if constraints.max_width else None
 
 
 class Text(Widget):
     def __init__(
             self, text: str, font: pygame.font.Font, *,
-            pos: Optional[Vector2] = None, size: Size = NaturalSize(),
-            color: Color = Color('black')):
+            pos: Optional[Vector2] = None, color: Color = Color('black')):
         self._text = TextRenderer(Vector2(), text, font, color=color)
 
         # TODO: Currently the height is ignored.
         # Implementing scroll seems a little insane, so just
         # cutting off the bottom is probably the way to go.
         self.pos = pos
-        self.size = size
+        self._set_constraints(Constraints())
 
     def draw(self, screen: pygame.Surface):
         super().draw(screen)
@@ -380,26 +423,14 @@ class Text(Widget):
 
     @property
     def size(self) -> Size:
-        if isinstance(self._size, FixedSize):
-            return self._size
+        return self._constraints.constrain(Size(
+            self._text.width,
+            self._text.height,
+        ))
 
-        elif isinstance(self._size, NaturalSize):
-            return NaturalSize(self._text.width, self._text.height)
-
-        else:
-            raise Exception('Unknown size type')
-
-    @size.setter
-    def size(self, size: Size):
-        if isinstance(size, FixedSize):
-            self._size = size
-            self._text.max_width = size.width
-
-        elif isinstance(size, NaturalSize):
-            self._size = size
-
-        else:
-            raise Exception('Unknown size type')
+    def _set_constraints(self, constraints: Constraints):
+        self._constraints = constraints
+        self._text.max_width = constraints.max_width
 
     @property
     def color(self):
@@ -585,3 +616,21 @@ class TextRenderer:
 
 def clamp(value, low, high):
     return max(low, min(value, high))
+
+
+def min_filtered(*values):
+    try:
+        return min(x for x in values if x is not None)
+    except ValueError:
+        return None
+
+
+def max_filtered(*values):
+    try:
+        return max(x for x in values if x is not None)
+    except ValueError:
+        return None
+
+
+def clamp_filted(value, min_, max_):
+    return max_filtered(min_, min_filtered(value, max_))
