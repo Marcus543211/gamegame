@@ -11,7 +11,7 @@ import pygame
 from pygame import Vector2
 
 from player import Player
-from scope import Scope
+from scope import Id, Scope
 
 
 def get_local_ip():
@@ -157,6 +157,8 @@ class GameServer(Server):
     def __init__(self, address: str):
         super().__init__(address)
 
+        self.next_id = Id(1)
+        self.address_to_id = {}
         self.scope = Scope()
         # Pressed keys is a mapping of the players to their set of pressed keys
         self.pressed_keys = {}
@@ -165,47 +167,59 @@ class GameServer(Server):
     def update(self):
         deltatime = self.clock.tick() / 1000
 
-        for address, player in self.scope.players.items():
+        for id_, player in self.scope.players.items():
             # Get the pressed keys of a client and update their player.
-            pressed_keys = self.pressed_keys[address]
+            pressed_keys = self.pressed_keys[id_]
             player.update(pressed_keys, deltatime)
 
             # Send a command that sets their new position
-            cmd = SetPositionCommand(address, player.position)
+            cmd = SetPositionCommand(id_, player.position)
             self.send_command(cmd)
 
     def handle_connect(self, new_address: tuple[str, int]):
-        self.scope.players[new_address] = Player()
-        self.pressed_keys[new_address] = set()
+        self.address_to_id[new_address] = self.next_id
+        self.next_id += 1
+
+        id_ = self.id_of(new_address)
+        self.scope.players[id_] = Player()
+        self.pressed_keys[id_] = set()
+
+        # Give the new player his id
+        self.sendto(new_address, pickle.dumps(SetIdCommand(id_)))
 
         # Add the new player to the clients
-        cmd = AddPlayerCommand(new_address)
+        cmd = AddPlayerCommand(id_)
         self.send_command(cmd)
 
         for address in self.clients:
             # Add the old players to the new client
             if address != new_address:
-                cmd = AddPlayerCommand(address)
+                cmd = AddPlayerCommand(self.id_of(address))
                 self.sendto(address, pickle.dumps(cmd))
 
     def handle_disconnect(self, address: tuple[str, int]):
-        del self.scope.players[address]
-        del self.pressed_keys[address]
+        id_ = self.id_of(address)
+        del self.scope.players[id_]
+        del self.pressed_keys[id_]
 
-        cmd = RemovePlayerCommand(address)
+        cmd = RemovePlayerCommand(id_)
         self.send_command(cmd)
 
     def handle(self, address: tuple[str, int], data):
         input_ = pickle.loads(data)
 
+        id_ = self.id_of(address)
         if isinstance(input_, KeyDownInput):
-            self.pressed_keys[address].add(input_.key)
+            self.pressed_keys[id_].add(input_.key)
         elif isinstance(input_, KeyUpInput):
-            self.pressed_keys[address].discard(input_.key)
+            self.pressed_keys[id_].discard(input_.key)
         elif isinstance(input_, Ping):
             pass
         else:
             raise Exception(f'Server recived unknown object: {input_}')
+
+    def id_of(self, address: tuple[str, int]) -> Id:
+        return self.address_to_id[address]
 
     def send_command(self, cmd: Command):
         for address in self.clients:
@@ -221,27 +235,35 @@ class Command(abc.ABC):
 
 @dataclass
 class AddPlayerCommand(Command):
-    address: str
+    id_: Id
 
     def execute(self, scope: Scope):
-        scope.players[self.address] = Player()
+        scope.players[self.id_] = Player()
+
+
+@dataclass
+class SetIdCommand(Command):
+    id_: Id
+
+    def execute(self, scope: Scope):
+        scope.id_ = self.id_
 
 
 @dataclass
 class RemovePlayerCommand(Command):
-    address: str
+    id_: Id
 
     def execute(self, scope: Scope):
-        del scope.players[self.address]
+        del scope.players[self.id_]
 
 
 @dataclass
 class SetPositionCommand(Command):
-    address: str
+    id_: Id
     position: Vector2
 
     def execute(self, scope: Scope):
-        player = scope.players.setdefault(self.address, Player())
+        player = scope.players.setdefault(self.id_, Player())
         player.position = self.position
 
 

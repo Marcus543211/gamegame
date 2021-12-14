@@ -98,10 +98,11 @@ class MainScene(Scene):
                 cmd.execute(self.scope)
 
             # Camera follows the player
-            player = self.scope.players.get(
-                ('127.0.0.1', self.client.address[1]))
+            player = self.scope.players.get(self.scope.id_)
+
             if player:
-                self.camera.position += (player.position - self.camera.position) * 2 * dt
+                self.camera.position += \
+                    (player.position - self.camera.position) * 2 * dt
 
             # Draw to the screen
             for player in self.scope.players.values():

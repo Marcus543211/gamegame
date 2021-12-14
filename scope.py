@@ -1,8 +1,14 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 from player import Player
 
 
+class Id(int):
+    pass
+
+
 @dataclass
 class Scope:
-    players: dict[tuple[str, int], Player] = field(default_factory=dict)
+    id_: Optional[Id] = None
+    players: dict[Id, Player] = field(default_factory=dict)
