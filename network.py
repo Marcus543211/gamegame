@@ -5,7 +5,8 @@ import logging
 import pickle
 import socket
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import ClassVar
 
 import pygame
 from pygame import Vector2
@@ -157,11 +158,15 @@ class GameServer(Server):
     def __init__(self, address: str):
         super().__init__(address)
 
+        self.position_count = 1
+
         self.next_id = Id(1)
         self.address_to_id = {}
-        self.scope = Scope()
+
         # Pressed keys is a mapping of the players to their set of pressed keys
         self.pressed_keys = {}
+        self.scope = Scope()
+
         self.clock = pygame.time.Clock()
 
     def update(self):
@@ -174,7 +179,9 @@ class GameServer(Server):
 
             # Send a command that sets their new position
             cmd = SetPositionCommand(
-                id_, player.position, player.last_acceleration, player.velocity)
+                id_, self.position_count, player.position,
+                player.last_acceleration, player.velocity)
+            self.position_count += 1
             self.send_command(cmd)
 
     def handle_connect(self, new_address: tuple[str, int]):
@@ -260,12 +267,21 @@ class RemovePlayerCommand(Command):
 
 @dataclass
 class SetPositionCommand(Command):
+    global_count: ClassVar[int] = 0
+
     id_: Id
+    count: int
+
     position: Vector2
     last_acceleration: Vector2
     velocity: Vector2
 
     def execute(self, scope: Scope):
+        if self.count <= SetPositionCommand.global_count:
+            return
+
+        SetPositionCommand.global_count = self.count
+
         player = scope.players.setdefault(self.id_, Player())
         player.position = self.position
         player.last_acceleration = self.last_acceleration
