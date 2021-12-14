@@ -36,7 +36,7 @@ class Client:
 
     @property
     def address(self):
-        return self._socket.getsockname()[0]
+        return self._socket.getsockname()
 
     def recive(self):
         try:

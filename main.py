@@ -74,7 +74,7 @@ class MainScene(Scene):
     def start(self):
         while True:
             # Control the framerate
-            self.clock.tick(120)
+            dt = self.clock.tick(120) / 1000
 
             # Yield control to the main loop and get the events
             events = yield
@@ -98,9 +98,10 @@ class MainScene(Scene):
                 cmd.execute(self.scope)
 
             # Camera follows the player
-            #player = self.scope.players.get(self.client.address)
-            # if player:
-            #    self.camera.position = player.position
+            player = self.scope.players.get(
+                ('127.0.0.1', self.client.address[1]))
+            if player:
+                self.camera.position += (player.position - self.camera.position) * 2 * dt
 
             # Draw to the screen
             for player in self.scope.players.values():

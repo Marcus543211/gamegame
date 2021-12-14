@@ -10,7 +10,7 @@ class Player:
     velocity: Vector2 = field(default_factory=Vector2)
     position: Vector2 = field(default_factory=Vector2)
     force: float = 3
-    drag: float = 0.006
+    drag: float = 0.1
     radius: float = 0.25
     #static_drag: float = 0.75
 
