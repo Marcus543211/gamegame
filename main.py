@@ -1,6 +1,7 @@
 import abc
 import atexit
 import logging
+import random
 
 import pygame
 from pygame import Color, Vector2
@@ -71,10 +72,21 @@ class MainScene(Scene):
         self.camera = Camera()
         self.scope = Scope()
 
+        self.unscaled_bush = pygame.image.load('bush.png').convert_alpha()
+        self.scale_bush()
+        self.bushes = [Vector2(random.uniform(-20, 20),
+                               random.uniform(-20, 20))
+                       for _ in range(100)]
+
+    def scale_bush(self):
+        self.bush = pygame.transform.smoothscale(
+            self.unscaled_bush,
+            Vector2(1, 1) * self.camera.world_to_pixel_ratio)
+
     def start(self):
         while True:
             # Control the framerate
-            dt = self.clock.tick(120) / 1000
+            deltatime = self.clock.tick(120) / 1000
 
             # Yield control to the main loop and get the events
             events = yield
@@ -101,10 +113,17 @@ class MainScene(Scene):
             player = self.scope.players.get(self.scope.id_)
 
             if player:
+                self.camera.width += \
+                    10 * deltatime * ((10 + player.velocity.length()) - self.camera.width)
+                self.scale_bush()
                 self.camera.position += \
-                    (player.position - self.camera.position) * 2 * dt
+                    2 * deltatime * (player.position - self.camera.position)
 
-            # Draw to the screen
+            # Draw the bushes
+            for bush in self.bushes:
+                self.screen.blit(self.bush, self.camera.world_to_pixel(bush))
+
+            # Draw the players
             for player in self.scope.players.values():
                 player.draw(self)
 
@@ -207,7 +226,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Setup pygame
-    screen = pygame.display.set_mode((800, 600))
+    screen = pygame.display.set_mode(flags=pygame.FULLSCREEN)
     pygame.display.set_caption('Ball Bouncing')
 
     # Create our main scene
@@ -218,8 +237,13 @@ def main():
         try:
             events = pygame.event.get()
 
-            if any(event.type == pygame.QUIT for event in events):
-                break
+            for event in events:
+                if event.type == pygame.QUIT:
+                    raise QuitException()
+
+                if event.type == pygame.KEYDOWN \
+                        and event.key == pygame.K_ESCAPE:
+                    raise QuitException()
 
             screen.fill(pygame.Color('white'))
             scene.send(events)

@@ -173,7 +173,8 @@ class GameServer(Server):
             player.update(pressed_keys, deltatime)
 
             # Send a command that sets their new position
-            cmd = SetPositionCommand(id_, player.position)
+            cmd = SetPositionCommand(
+                id_, player.position, player.last_acceleration, player.velocity)
             self.send_command(cmd)
 
     def handle_connect(self, new_address: tuple[str, int]):
@@ -261,10 +262,14 @@ class RemovePlayerCommand(Command):
 class SetPositionCommand(Command):
     id_: Id
     position: Vector2
+    last_acceleration: Vector2
+    velocity: Vector2
 
     def execute(self, scope: Scope):
         player = scope.players.setdefault(self.id_, Player())
         player.position = self.position
+        player.last_acceleration = self.last_acceleration
+        player.velocity = self.velocity
 
 
 class Input:

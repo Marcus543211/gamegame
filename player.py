@@ -9,10 +9,9 @@ class Player:
     acceleration: Vector2 = field(default_factory=Vector2)
     velocity: Vector2 = field(default_factory=Vector2)
     position: Vector2 = field(default_factory=Vector2)
-    force: float = 3
-    drag: float = 0.1
+    force: float = 4
+    drag: float = 0.08
     radius: float = 0.25
-    #static_drag: float = 0.75
 
     def __post_init__(self):
         self.debug = True
@@ -53,7 +52,7 @@ class Player:
         self.position += self.velocity * deltatime
 
         # Reset acceleration
-        self.last_acceleration = self.acceleration
+        self.last_acceleration = Vector2(self.acceleration)
         self.acceleration = Vector2(0, 0)
 
     @property
