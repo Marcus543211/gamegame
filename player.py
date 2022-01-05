@@ -14,10 +14,10 @@ class Player:
     acceleration: Vector2 = field(default_factory = Vector2)
     velocity: Vector2 = field(default_factory = Vector2)
     position: Vector2 = field(default_factory = Vector2)
-    input_force: float = 200
+    input_force: float = 250
     
     drag: float = 4
-    brake: float = 30
+    brake: float = 15
     radius: float = 0.25
     mass: float = 50
 
