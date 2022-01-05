@@ -114,7 +114,7 @@ class MainScene(Scene):
 
             if player:
                 self.camera.width += \
-                    10 * deltatime * \
+                    100 * deltatime * \
                     ((10 + player.velocity.length()) - self.camera.width)
                 self.scale_bush()
                 self.camera.position += \
