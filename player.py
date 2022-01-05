@@ -17,8 +17,11 @@ class Player:
     input_force: float = 200
     
     drag: float = 4
+    brake: float = 30
     radius: float = 0.25
     mass: float = 50
+
+    braking: bool = False
 
     def __post_init__(self):
         self.debug = True
@@ -47,12 +50,17 @@ class Player:
 
     def input(self, keys):
         self.force += self.input_vector(keys) * self.input_force
+        self.braking = pygame.K_SPACE in keys
 
     def physics(self, deltatime):
         # Drag
         drag_force = self.velocity.length() ** 2 * self.drag
         if self.velocity.length() != 0:
             self.force -= self.velocity.normalize() * drag_force
+
+        brake_force = self.velocity.length() ** 2 * self.brake
+        if self.braking and self.velocity.length() != 0:
+            self.force -= self.velocity.normalize() * brake_force
 
         # Acceleration, velocity and position
         self.acceleration = self.force / self.mass
