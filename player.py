@@ -3,9 +3,12 @@ from dataclasses import dataclass, field
 import pygame
 from pygame import Vector2, Rect
 
+from scope import Id
+
 
 @dataclass
 class Player:
+    id: Id
     acceleration: Vector2 = field(default_factory=Vector2)
     velocity: Vector2 = field(default_factory=Vector2)
     position: Vector2 = field(default_factory=Vector2)
