@@ -13,7 +13,8 @@ import pygame
 from pygame import Vector2
 
 from player import Player
-from scope import Id, Scope
+from id import Id
+from scope import Scope
 
 
 def get_local_ip():
@@ -122,14 +123,9 @@ class Server(abc.ABC):
                     self._handle_connect(address, data)
 
     def _check_disconnects(self):
-        timeouts = []
-
-        for address, last_active in self.timeouts.items():
+        for address, last_active in list(self.timeouts.items()):
             if time.time() - last_active > self.client_timeout:
-                timeouts.append(address)
-
-        for address in timeouts:
-            self._handle_disconnect(address)
+                self._handle_disconnect(address)
 
     def _handle_message(self, address: tuple[str, int], data):
         self.timeouts[address] = time.time()
@@ -176,16 +172,23 @@ class GameServer(Server):
             self.scope.circle_radius -= 0.4 * deltatime
             self.send_command(SetRadiusCommand(self.scope.circle_radius))
 
-        for id_, player in self.scope.players.items():
-            # Get the pressed keys of a client and update their player.
+        # Update the players
+        for id_, player in list(self.scope.players.items()):
+            # Get the pressed keys of the related client
+            # and update their player based on the keypresses.
             pressed_keys = self.pressed_keys[id_]
             player.update(pressed_keys, deltatime)
 
             # Send a command that sets their new position
-            cmd = SetPositionCommand(
+            self.send_command(SetPositionCommand(
                 id_, player.position,
-                player.last_acceleration, player.velocity)
-            self.send_command(cmd)
+                player.last_acceleration, player.velocity
+            ))
+
+            # If they're outside the playing field kill them
+            if player.position.length() > self.scope.circle_radius:
+                self.send_command(RemovePlayerCommand(id_))
+                del self.scope.players[id_]
 
     def handle_connect(self, new_address: tuple[str, int]):
         self.address_to_id[new_address] = self.next_id
@@ -207,8 +210,7 @@ class GameServer(Server):
         del self.scope.players[id_]
         del self.pressed_keys[id_]
 
-        cmd = RemovePlayerCommand(id_)
-        self.send_command(cmd)
+        self.send_command(RemovePlayerCommand(id_))
 
     def handle(self, address: tuple[str, int], data):
         input_ = pickle.loads(data)

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import pygame
 from pygame import Vector2, Rect
 
-from scope import Id
+from id import Id
 
 
 @dataclass

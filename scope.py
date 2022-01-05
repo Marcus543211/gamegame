@@ -1,11 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+from id import Id
 from player import Player
-
-
-class Id(int):
-    pass
 
 
 @dataclass

@@ -72,8 +72,6 @@ class MainScene(Scene):
         self.camera = Camera()
         self.scope = Scope()
 
-        self.circle_radius = 20
-
         self.unscaled_bush = pygame.image.load('bush.png').convert_alpha()
         self.scale_bush()
         self.bushes = [Vector2(random.uniform(-20, 20),
@@ -121,6 +119,10 @@ class MainScene(Scene):
                 self.scale_bush()
                 self.camera.position += \
                     2 * deltatime * (player.position - self.camera.position)
+            else:
+                self.camera.width = self.scope.circle_radius * 3
+                self.scale_bush()
+                self.camera.position = Vector2(0)
 
             # Draw the playing field
             pygame.draw.circle(self.screen, Color(0),
@@ -249,6 +251,7 @@ def main():
         try:
             events = pygame.event.get()
 
+            # Check if the window should close
             for event in events:
                 if event.type == pygame.QUIT:
                     raise QuitException()
@@ -257,6 +260,7 @@ def main():
                         and event.key == pygame.K_ESCAPE:
                     raise QuitException()
 
+            # Update and draw the scene
             screen.fill(pygame.Color('white'))
             scene.send(events)
             pygame.display.flip()
