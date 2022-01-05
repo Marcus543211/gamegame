@@ -15,32 +15,32 @@ class Camera:
     width: float = 10
 
     @property
-    def height(self):
+    def height(self) -> float:
         return self.width * self.screen_size.y / self.screen_size.x
 
     @property
-    def size(self):
+    def size(self) -> Vector2:
         return Vector2(self.width, self.height)
 
     @property
-    def view_rect(self):
+    def view_rect(self) -> Rect:
         return Rect(self.position - self.size / 2, self.size / 2)
 
-    def inside(self, rect: Rect):
+    def inside(self, rect: Rect) -> bool:
         return self.view_rect.contains(rect)
 
-    def pixel_to_world(self, pos: Vector2):
+    def pixel_to_world(self, pos: Vector2) -> Vector2:
         x = pos.x / self.screen_size.x * self.width - self.width / 2 + self.position.x
         y = pos.y / self.screen_size.y * self.height - self.height / 2 + self.position.y
         return Vector2(x, y)
 
-    def world_to_pixel(self, pos: Vector2):
+    def world_to_pixel(self, pos: Vector2) -> Vector2:
         return (pos - self.position + self.size / 2) * self.world_to_pixel_ratio
 
     @property
-    def pixel_to_world_ratio(self):
+    def pixel_to_world_ratio(self) -> float:
         return self.width / self.screen_size.x
 
     @property
-    def world_to_pixel_ratio(self):
+    def world_to_pixel_ratio(self) -> float:
         return self.screen_size.x / self.width

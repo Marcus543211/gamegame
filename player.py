@@ -3,28 +3,32 @@ from dataclasses import dataclass, field
 import pygame
 from pygame import Vector2, Rect
 
+import getpass
+
 from id import Id
 
 
 @dataclass
 class Player:
     id: Id
+    name: str = getpass.getuser()
 
     force: Vector2 = field(default_factory = Vector2)
     acceleration: Vector2 = field(default_factory = Vector2)
     velocity: Vector2 = field(default_factory = Vector2)
     position: Vector2 = field(default_factory = Vector2)
-    input_force: float = 250
+    input_force: float = 325
     
-    drag: float = 4
-    brake: float = 15
-    radius: float = 0.25
+    radius: float = 0.5
     mass: float = 50
+    drag: float = 4
+    brake: float = 25
+    incosistent_surface: float = 0.002
 
     braking: bool = False
 
     def __post_init__(self):
-        self.debug = True
+        self.debug = False
         self.font = pygame.font.SysFont('MS UI Gothic', 20)
         self.last_acceleration = Vector2(0, 0)
 
@@ -34,13 +38,13 @@ class Player:
 
     def input_vector(self, pressed_keys):
         direction = Vector2(0, 0)
-        if pygame.K_w in pressed_keys:
+        if pygame.K_w in pressed_keys or pygame.K_UP in pressed_keys:
             direction -= Vector2(0, 1)
-        if pygame.K_a in pressed_keys:
+        if pygame.K_a in pressed_keys or pygame.K_LEFT in pressed_keys:
             direction -= Vector2(1, 0)
-        if pygame.K_s in pressed_keys:
+        if pygame.K_s in pressed_keys or pygame.K_DOWN in pressed_keys:
             direction += Vector2(0, 1)
-        if pygame.K_d in pressed_keys:
+        if pygame.K_d in pressed_keys or pygame.K_RIGHT in pressed_keys:
             direction += Vector2(1, 0)
 
         if direction.length() != 0:
@@ -58,9 +62,17 @@ class Player:
         if self.velocity.length() != 0:
             self.force -= self.velocity.normalize() * drag_force
 
+        # Brake
         brake_force = self.velocity.length() ** 2 * self.brake
         if self.braking and self.velocity.length() != 0:
             self.force -= self.velocity.normalize() * brake_force
+
+        # Not 'real' physics, but does simulate an inconsistent surface (both on the floor and the ball)
+        if self.incosistent_surface > 0:
+            if self.velocity.length() > self.incosistent_surface:
+                self.velocity -= self.velocity.normalize() * self.incosistent_surface
+            else:
+                self.velocity -= self.velocity
 
         # Acceleration, velocity and position
         self.acceleration = self.force / self.mass
@@ -87,9 +99,20 @@ class Player:
         return Rect(bottom_left, Vector2(2 * self.radius))
 
     def draw(self, scene):
+        pixelPosition = scene.camera.world_to_pixel(self.position)
+        pixelRadius = self.radius * scene.camera.world_to_pixel_ratio
+
         pygame.draw.circle(scene.screen, (255, 0, 0),
-                           scene.camera.world_to_pixel(self.position),
-                           self.radius * scene.camera.world_to_pixel_ratio)
+                           pixelPosition,
+                           pixelRadius)
+        labelPosition = Vector2(pixelPosition.x, pixelPosition.y + pixelRadius * 1.4)
+        text = self.font.render(
+            self.name,
+            True,
+            (0, 0, 0)
+        )
+        text_rect = text.get_rect(center=(labelPosition.x, labelPosition.y))
+        scene.screen.blit(text, text_rect)
 
         if self.debug:
             scene.screen.blit(self.font.render(

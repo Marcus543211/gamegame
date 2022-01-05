@@ -18,6 +18,7 @@ from scope import Scope
 pygame.init()
 
 font = pygame.font.SysFont('MS UI Gothic', 24)
+mainMenuFont = pygame.font.SysFont('MS UI Gothic', 48)
 
 
 class QuitException(Exception):
@@ -84,6 +85,8 @@ class MainScene(Scene):
             Vector2(1, 1) * self.camera.world_to_pixel_ratio)
 
     def start(self):
+        pygame.mixer.music.stop()
+
         while True:
             # Control the framerate
             deltatime = self.clock.tick(120) / 1000
@@ -156,14 +159,18 @@ class MainMenuScene(Scene):
         self.should_host = should_host
 
     def start(self):
-        host_button = ui.Button(pos=Vector2(100, 100),
-                                child=ui.Text('Host a game', font),
+        pygame.mixer.music.load('BattleBalls.wav')
+        pygame.mixer.music.set_volume(0.15)
+        pygame.mixer.music.play(-1)
+        title = ui.Text("Battle Balls", mainMenuFont, pos = Vector2(245, 100))
+        host_button = ui.Button(pos=Vector2(240, 250),
+                                child=ui.Text('Host a game', mainMenuFont),
                                 callback=lambda: self.set_should_host(True))
-        client_button = ui.Button(pos=Vector2(100, 200),
-                                  child=ui.Text('Join a game', font),
+        client_button = ui.Button(pos=Vector2(240, 350),
+                                  child=ui.Text('Join a game', mainMenuFont),
                                   callback=lambda: self.set_should_host(False))
 
-        ui_scene = UiScene(self.screen, [host_button, client_button])
+        ui_scene = UiScene(self.screen, [title, host_button, client_button])
 
         while self.should_host is None:
             events = yield

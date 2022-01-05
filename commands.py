@@ -31,6 +31,11 @@ def set_id(scope: Scope, id_: Id):
 
 
 @command
+def set_name(scope: Scope, id_: Id, name: str):
+    scope.players[id_].name = name
+
+
+@command
 def remove_player(scope: Scope, id_: Id):
     del scope.players[id_]
 
