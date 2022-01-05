@@ -208,8 +208,11 @@ class GameServer(Server):
 
     def handle_disconnect(self, address: tuple[str, int]):
         id_ = self.id_of(address)
-        del self.scope.players[id_]
-        del self.pressed_keys[id_]
+        try:
+            del self.scope.players[id_]
+            del self.pressed_keys[id_]
+        except KeyError:
+            pass
 
         self.send_command(RemovePlayerCommand(id_))
 
