@@ -72,6 +72,8 @@ class MainScene(Scene):
         self.camera = Camera()
         self.scope = Scope()
 
+        self.circle_radius = 20
+
         self.unscaled_bush = pygame.image.load('bush.png').convert_alpha()
         self.scale_bush()
         self.bushes = [Vector2(random.uniform(-20, 20),
@@ -107,7 +109,7 @@ class MainScene(Scene):
 
             # Receive incoming packets
             while cmd := self.client.recive():
-                cmd.execute(self.scope)
+                cmd.run(self.scope)
 
             # Camera follows the player
             player = self.scope.players.get(self.scope.id_)
@@ -120,9 +122,18 @@ class MainScene(Scene):
                 self.camera.position += \
                     2 * deltatime * (player.position - self.camera.position)
 
+            # Draw the playing field
+            pygame.draw.circle(self.screen, Color(0),
+                               self.camera.world_to_pixel(Vector2(0)),
+                               self.scope.circle_radius
+                               * self.camera.world_to_pixel_ratio,
+                               10)
+
             # Draw the bushes
             for bush in self.bushes:
-                self.screen.blit(self.bush, self.camera.world_to_pixel(bush))
+                if (bush + Vector2(0.5)).length() < self.scope.circle_radius:
+                    self.screen.blit(self.bush,
+                                     self.camera.world_to_pixel(bush))
 
             # Draw the players
             for player in self.scope.players.values():
@@ -200,7 +211,7 @@ class ClientJoinScene(Scene):
         text = ui.Text(msg.format(''), font)
         box = ui.ConstrainedBox(text, ui.Constraints(max_width=400),
                                 pos=Vector2(100, 100))
-        entry = ui.Entry(font, Vector2(100, 200), text='127.0.0.1:')
+        entry = ui.Entry(font, Vector2(100, 200), text='127.0.0.1')
         join = ui.Button(Vector2(100, 300),
                          child=ui.Text('Join', font),
                          callback=lambda: self.set_address(entry.text))
@@ -227,7 +238,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Setup pygame
-    screen = pygame.display.set_mode(flags=pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('Ball Bouncing')
 
     # Create our main scene

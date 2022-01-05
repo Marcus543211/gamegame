@@ -5,8 +5,9 @@ import logging
 import pickle
 import socket
 import time
-from dataclasses import dataclass, field
-from typing import ClassVar
+
+from dataclasses import dataclass, fields
+from itertools import count
 
 import pygame
 from pygame import Vector2
@@ -158,8 +159,6 @@ class GameServer(Server):
     def __init__(self, address: str):
         super().__init__(address)
 
-        self.position_count = 1
-
         self.next_id = Id(1)
         self.address_to_id = {}
 
@@ -172,6 +171,11 @@ class GameServer(Server):
     def update(self):
         deltatime = self.clock.tick() / 1000
 
+        # Decrease the size of the circle
+        if self.scope.circle_radius > 2:
+            self.scope.circle_radius -= 0.4 * deltatime
+            self.send_command(SetRadiusCommand(self.scope.circle_radius))
+
         for id_, player in self.scope.players.items():
             # Get the pressed keys of a client and update their player.
             pressed_keys = self.pressed_keys[id_]
@@ -179,9 +183,8 @@ class GameServer(Server):
 
             # Send a command that sets their new position
             cmd = SetPositionCommand(
-                id_, self.position_count, player.position,
+                id_, player.position,
                 player.last_acceleration, player.velocity)
-            self.position_count += 1
             self.send_command(cmd)
 
     def handle_connect(self, new_address: tuple[str, int]):
@@ -195,15 +198,9 @@ class GameServer(Server):
         # Give the new player his id
         self.sendto(new_address, pickle.dumps(SetIdCommand(id_)))
 
-        # Add the new player to the clients
-        cmd = AddPlayerCommand(id_)
-        self.send_command(cmd)
-
-        for address in self.clients:
-            # Add the old players to the new client
-            if address != new_address:
-                cmd = AddPlayerCommand(self.id_of(address))
-                self.sendto(address, pickle.dumps(cmd))
+        # The new player will be added to the other players
+        # when their position is sent. The same goes for
+        # adding the old players to the new player.
 
     def handle_disconnect(self, address: tuple[str, int]):
         id_ = self.id_of(address)
@@ -215,14 +212,17 @@ class GameServer(Server):
 
     def handle(self, address: tuple[str, int], data):
         input_ = pickle.loads(data)
-
         id_ = self.id_of(address)
+
         if isinstance(input_, KeyDownInput):
             self.pressed_keys[id_].add(input_.key)
+
         elif isinstance(input_, KeyUpInput):
             self.pressed_keys[id_].discard(input_.key)
+
         elif isinstance(input_, Ping):
             pass
+
         else:
             raise Exception(f'Server recived unknown object: {input_}')
 
@@ -237,23 +237,45 @@ class GameServer(Server):
 
 class Command(abc.ABC):
     @abc.abstractmethod
-    def execute(self, scope: Scope):
+    def run(self, scope: Scope):
         pass
 
 
-@dataclass
-class AddPlayerCommand(Command):
-    id_: Id
+class OnlyMostRecentCommand(Command):
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        cls._global_counter = count()
+        cls._max_count = 0
 
-    def execute(self, scope: Scope):
-        scope.players[self.id_] = Player()
+        old_run = cls.run
+
+        def new_run(self, scope: Scope):
+            if self._count >= cls._max_count:
+                cls._max_count = self._count
+                old_run(self, scope)
+
+        cls.run = new_run
+
+    def __init__(self):
+        self._count = next(type(self)._global_counter)
+
+
+@dataclass
+class SetRadiusCommand(OnlyMostRecentCommand):
+    radius: float
+
+    def __post_init__(self):
+        super().__init__()
+
+    def run(self, scope: Scope):
+        scope.circle_radius = self.radius
 
 
 @dataclass
 class SetIdCommand(Command):
     id_: Id
 
-    def execute(self, scope: Scope):
+    def run(self, scope: Scope):
         scope.id_ = self.id_
 
 
@@ -261,27 +283,21 @@ class SetIdCommand(Command):
 class RemovePlayerCommand(Command):
     id_: Id
 
-    def execute(self, scope: Scope):
+    def run(self, scope: Scope):
         del scope.players[self.id_]
 
 
 @dataclass
-class SetPositionCommand(Command):
-    global_count: ClassVar[int] = 0
-
+class SetPositionCommand(OnlyMostRecentCommand):
     id_: Id
-    count: int
-
     position: Vector2
     last_acceleration: Vector2
     velocity: Vector2
 
-    def execute(self, scope: Scope):
-        if self.count <= SetPositionCommand.global_count:
-            return
+    def __post_init__(self):
+        super().__init__()
 
-        SetPositionCommand.global_count = self.count
-
+    def run(self, scope: Scope):
         player = scope.players.setdefault(self.id_, Player())
         player.position = self.position
         player.last_acceleration = self.last_acceleration
