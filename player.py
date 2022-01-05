@@ -16,7 +16,7 @@ class Player:
     position: Vector2 = field(default_factory = Vector2)
     input_force: float = 200
     
-    drag: float = 0.08
+    drag: float = 4
     radius: float = 0.25
     mass: float = 50
 
@@ -52,16 +52,15 @@ class Player:
         # Drag
         drag_force = self.velocity.length() ** 2 * self.drag
         if self.velocity.length() != 0:
-            self.acceleration -= self.velocity.normalize() * drag_force
+            self.force -= self.velocity.normalize() * drag_force
 
         # Acceleration, velocity and position
         self.acceleration = self.force / self.mass
         self.velocity += self.acceleration * deltatime
         self.position += self.velocity * deltatime
 
-        # Reset acceleration
-        self.last_acceleration = Vector2(self.acceleration)
-        self.acceleration = Vector2(0, 0)
+        # Reset force
+        self.force = Vector2(0, 0)
 
     def collision(self, others):
         for other in others:

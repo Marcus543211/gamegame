@@ -178,6 +178,7 @@ class GameServer(Server):
             # and update their player based on the keypresses.
             pressed_keys = self.pressed_keys[id_]
             player.update(pressed_keys, deltatime)
+            player.collision(self.scope.players.values())
 
             # Send a command that sets their new position
             self.send_command(SetPositionCommand(
