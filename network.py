@@ -192,7 +192,7 @@ class GameServer(Server):
         self.next_id += 1
 
         id_ = self.id_of(new_address)
-        self.scope.players[id_] = Player()
+        self.scope.players[id_] = Player(id_)
         self.pressed_keys[id_] = set()
 
         # Give the new player his id
@@ -298,7 +298,7 @@ class SetPositionCommand(OnlyMostRecentCommand):
         super().__init__()
 
     def run(self, scope: Scope):
-        player = scope.players.setdefault(self.id_, Player())
+        player = scope.players.setdefault(self.id_, Player(self.id_))
         player.position = self.position
         player.last_acceleration = self.last_acceleration
         player.velocity = self.velocity
