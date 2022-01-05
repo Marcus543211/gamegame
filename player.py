@@ -9,12 +9,16 @@ from scope import Id
 @dataclass
 class Player:
     id: Id
-    acceleration: Vector2 = field(default_factory=Vector2)
-    velocity: Vector2 = field(default_factory=Vector2)
-    position: Vector2 = field(default_factory=Vector2)
-    force: float = 4
+
+    force: Vector2 = field(default_factory = Vector2)
+    acceleration: Vector2 = field(default_factory = Vector2)
+    velocity: Vector2 = field(default_factory = Vector2)
+    position: Vector2 = field(default_factory = Vector2)
+    input_force: float = 200
+    
     drag: float = 0.08
     radius: float = 0.25
+    mass: float = 50
 
     def __post_init__(self):
         self.debug = True
@@ -42,7 +46,7 @@ class Player:
             return Vector2(0, 0)
 
     def input(self, keys):
-        self.acceleration += self.input_vector(keys) * self.force
+        self.force += self.input_vector(keys) * self.input_force
 
     def physics(self, deltatime):
         # Drag
@@ -51,12 +55,24 @@ class Player:
             self.acceleration -= self.velocity.normalize() * drag_force
 
         # Acceleration, velocity and position
+        self.acceleration = self.force / self.mass
         self.velocity += self.acceleration * deltatime
         self.position += self.velocity * deltatime
 
         # Reset acceleration
         self.last_acceleration = Vector2(self.acceleration)
         self.acceleration = Vector2(0, 0)
+
+    def collision(self, others):
+        for other in others:
+            if self.id > other.id and Vector2.distance_to(self.position, other.position) < self.radius + other.radius:
+                m = self.mass
+                M = other.mass
+                u = self.velocity
+                U = other.velocity
+
+                self.velocity =  (2 * M * U - M * u + m * u) / (M + m)
+                other.velocity = (M * U - U * m + 2 * m * u) / (M + m)
 
     @property
     def bounding_box(self):
