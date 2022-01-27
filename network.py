@@ -6,7 +6,7 @@ import pickle
 import socket
 import time
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from itertools import count
 
 import pygame
@@ -49,7 +49,12 @@ class Client:
 
         if address[0] == self.host and data.startswith(PROTOCOL_HEADER):
             data = data.removeprefix(PROTOCOL_HEADER)
-            return pickle.loads(data)
+            obj = pickle.loads(data)
+
+            if isinstance(obj, Acknowledged):
+                self.send(Acknowledge(obj))
+
+            return obj
 
         return None
 
@@ -68,6 +73,8 @@ class Server(abc.ABC):
         self.timeouts = {}
         self.client_timeout = client_timeout
 
+        self.not_acknoledged = set()
+
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind((address, PORT))
         self._socket.setblocking(False)
@@ -79,7 +86,9 @@ class Server(abc.ABC):
         return self._socket.getsockname()[0]
 
     def update(self):
-        pass
+        for missing in self.not_acknoledged:
+            print(f"Resending unacknowledged message: {missing}")
+            self.send_to(missing[0], missing[1], acknoledge=False)
 
     def handle_connect(self, address: tuple[str, int]):
         pass
@@ -88,7 +97,7 @@ class Server(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def handle(self, address: tuple[str, int], data):
+    def handle(self, address: tuple[str, int], obj):
         pass
 
     def close(self):
@@ -100,9 +109,16 @@ class Server(abc.ABC):
         self._check_disconnects()
         self.update()
 
-    def sendto(self, address: tuple[str, int], data):
-        data = PROTOCOL_HEADER + data
+    def send_to(self, address: tuple[str, int], obj, acknoledge=True):
+        if isinstance(obj, Acknowledged) and acknoledge:
+            self.not_acknoledged.add((address, obj))
+
+        data = PROTOCOL_HEADER + pickle.dumps(obj)
         self._socket.sendto(data, address)
+
+    def send_to_all(self, obj):
+        for address in self.clients:
+            self.send_to(address, obj)
 
     def _handle_messages(self):
         while True:
@@ -129,7 +145,15 @@ class Server(abc.ABC):
 
     def _handle_message(self, address: tuple[str, int], data):
         self.timeouts[address] = time.time()
-        self.handle(address, data)
+        obj = pickle.loads(data)
+
+        if isinstance(obj, Acknowledge):
+            try:
+                self.not_acknoledged.remove((address, obj.obj))
+            except KeyError:
+                pass
+        else:
+            self.handle(address, obj)
 
     def _handle_connect(self, address: tuple[str, int], data):
         logging.debug("Server accepted client: %s", address)
@@ -146,9 +170,8 @@ class Server(abc.ABC):
 
 
 class EchoServer(Server):
-    def handle(self, _, data):
-        for address in self.clients:
-            self.sendto(address, data)
+    def handle(self, _, obj):
+        self.send_to_all(obj)
 
 
 class GameServer(Server):
@@ -165,12 +188,14 @@ class GameServer(Server):
         self.clock = pygame.time.Clock()
 
     def update(self):
+        super().update()
+
         deltatime = self.clock.tick() / 1000
 
         # Decrease the size of the circle
         if self.scope.circle_radius > 2:
             self.scope.circle_radius -= 0.4 * deltatime
-            self.send_command(SetRadiusCommand(self.scope.circle_radius))
+            self.send_to_all(SetRadiusCommand(self.scope.circle_radius))
 
         # Update the players
         for id_, player in list(self.scope.players.items()):
@@ -181,14 +206,14 @@ class GameServer(Server):
             player.collision(self.scope.players.values())
 
             # Send a command that sets their new position
-            self.send_command(SetPositionCommand(
+            self.send_to_all(SetPositionCommand(
                 id_, player.position,
                 player.last_acceleration, player.velocity
             ))
 
             # If they're outside the playing field kill them
             if player.position.length() > self.scope.circle_radius:
-                self.send_command(RemovePlayerCommand(id_))
+                self.send_to_all(RemovePlayerCommand(id_))
                 del self.scope.players[id_]
 
     def handle_connect(self, new_address: tuple[str, int]):
@@ -200,7 +225,7 @@ class GameServer(Server):
         self.pressed_keys[id_] = set()
 
         # Give the new player his id
-        self.sendto(new_address, pickle.dumps(SetIdCommand(id_)))
+        self.send_to(new_address, SetIdCommand(id_))
 
         # The new player will be added to the other players
         # when their position is sent. The same goes for
@@ -214,31 +239,34 @@ class GameServer(Server):
         except KeyError:
             pass
 
-        self.send_command(RemovePlayerCommand(id_))
+        self.send_to_all(RemovePlayerCommand(id_))
 
-    def handle(self, address: tuple[str, int], data):
-        input_ = pickle.loads(data)
+    def handle(self, address: tuple[str, int], obj):
         id_ = self.id_of(address)
 
-        if isinstance(input_, KeyDownInput):
-            self.pressed_keys[id_].add(input_.key)
+        if isinstance(obj, KeyDownInput):
+            self.pressed_keys[id_].add(obj.key)
 
-        elif isinstance(input_, KeyUpInput):
-            self.pressed_keys[id_].discard(input_.key)
+        elif isinstance(obj, KeyUpInput):
+            self.pressed_keys[id_].discard(obj.key)
 
-        elif isinstance(input_, Ping):
+        elif isinstance(obj, Ping):
             pass
 
         else:
-            raise Exception(f'Server recived unknown object: {input_}')
+            raise Exception(f'Server recived unknown object: {obj}')
 
     def id_of(self, address: tuple[str, int]) -> Id:
         return self.address_to_id[address]
 
-    def send_command(self, cmd: Command):
-        for address in self.clients:
-            data = pickle.dumps(cmd)
-            self.sendto(address, data)
+
+@dataclass
+class Acknowledge:
+    obj: Acknowledged
+
+
+class Acknowledged:
+    pass
 
 
 class Command(abc.ABC):
@@ -263,10 +291,10 @@ class OnlyMostRecentCommand(Command):
         cls.run = new_run
 
     def __init__(self):
-        self._count = next(type(self)._global_counter)
+        object.__setattr__(self, '_count', next(type(self)._global_counter))
 
 
-@dataclass
+@dataclass(frozen=True)
 class SetRadiusCommand(OnlyMostRecentCommand):
     radius: float
 
@@ -277,23 +305,23 @@ class SetRadiusCommand(OnlyMostRecentCommand):
         scope.circle_radius = self.radius
 
 
-@dataclass
-class SetIdCommand(Command):
+@dataclass(frozen=True)
+class SetIdCommand(Command, Acknowledged):
     id_: Id
 
     def run(self, scope: Scope):
         scope.id_ = self.id_
 
 
-@dataclass
-class RemovePlayerCommand(Command):
+@dataclass(frozen=True)
+class RemovePlayerCommand(Command, Acknowledged):
     id_: Id
 
     def run(self, scope: Scope):
         del scope.players[self.id_]
 
 
-@dataclass
+@dataclass(frozen=True)
 class SetPositionCommand(OnlyMostRecentCommand):
     id_: Id
     position: Vector2
@@ -314,12 +342,12 @@ class Input:
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class KeyUpInput(Input):
     key: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class KeyDownInput(Input):
     key: int
 

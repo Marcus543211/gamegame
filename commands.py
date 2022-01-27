@@ -1,5 +1,7 @@
 import inspect
 
+from collections import namedtuple
+
 from pygame import Vector2
 
 from id import Id
@@ -7,12 +9,28 @@ from player import Player
 from scope import Scope
 
 
-def command(function=None, *, only_most_recent=False):
-    def wrapper(function):
+class Command:
+    def __init__(self, function, only_most_recent):
         parameters = inspect.signature(function).parameters
         non_scope_parameters = list(parameters)[1:]
-        print(non_scope_parameters)
-        return function
+        self._namedtuple = namedtuple(function.__name__, non_scope_parameters)
+        print(self._namedtuple)
+
+    def bind(self, *args):
+        pass
+
+
+class BoundCommand:
+    def __init__(self, args, kwargs):
+        pass
+
+    def __call__(self, scope: Scope):
+        pass
+
+
+def command(function=None, *, only_most_recent=False):
+    def wrapper(function):
+        return Command(function, only_most_recent)
 
     if function:
         return wrapper(function)

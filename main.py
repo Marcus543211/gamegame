@@ -116,9 +116,7 @@ class MainScene(Scene):
             player = self.scope.players.get(self.scope.id_)
 
             if player:
-                self.camera.width += \
-                    100 * deltatime * \
-                    ((10 + player.velocity.length()) - self.camera.width)
+                self.camera.width = 16 + player.velocity.length()
                 self.scale_bush()
                 self.camera.position += \
                     2 * deltatime * (player.position - self.camera.position)
@@ -136,7 +134,7 @@ class MainScene(Scene):
 
             # Draw the bushes
             for bush in self.bushes:
-                if (bush + Vector2(0.5)).length() < self.scope.circle_radius:
+                if (bush + Vector2(0.5)).length() + 0.5 < self.scope.circle_radius:
                     self.screen.blit(self.bush,
                                      self.camera.world_to_pixel(bush))
 
